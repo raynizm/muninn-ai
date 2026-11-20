@@ -4,7 +4,7 @@
 
 Muninn is an open source, self-hosted personal AI memory. Record a meeting, a thought or a voice note on your phone. Muninn transcribes it, summarizes it, pulls out the decisions and action items, and keeps it all in a place only you and your team control. Later, you can ask it what was said.
 
-> **Status:** milestone 1 is under construction. The backend (login, setup, providers, uploads) is being built first; the web app and phone app follow. See [What works today](#what-works-today).
+> **Status:** milestone 1 is feature complete: backend, web app and phone app. The phone app has only been checked with automated tests so far; run the [manual checklist](infrastructure/e2e/README.md) on a real device before relying on it. See [What works today](#what-works-today).
 
 ## Why "Muninn"?
 
@@ -49,8 +49,8 @@ The long-term goal is a searchable personal memory you can question: *"What did 
 | Recording upload and access API | Done |
 | Transcription and summaries | Done |
 | Docker Compose (backend, Postgres, Whisper) | Done |
-| Web app | Planned (milestone 1) |
-| Phone app (iOS and Android) | Planned (milestone 1) |
+| Web app (sign-in, setup wizard, recordings, settings) | Done |
+| Phone app (iOS and Android): record, offline queue, upload, list and detail | Done, needs a real-device check |
 | Search and chat over memories, multi-model routing, Gemini and Anthropic | Later milestones |
 
 ## How it is built
@@ -113,7 +113,7 @@ docker compose logs backend | grep "SETUP TOKEN"
 
 ### 4. Register Muninn with your identity provider
 
-Create an OIDC web application in Microsoft Entra or Google Cloud. Set the redirect URI to your Muninn address and note the issuer URL, client ID and client secret.
+Create an OIDC web application in Microsoft Entra or Google Cloud. Set the redirect URI to `https://<your Muninn address>/login/callback` (the web app and the phone app both use it) and note the issuer URL, client ID and client secret.
 
 ### 5. Run the setup wizard
 
@@ -128,6 +128,27 @@ Open your Muninn address in a browser. The wizard asks for:
 ### Recovery
 
 If SSO is misconfigured, restart the backend with `--muninn.reissue-setup-token=true`. It prints a new token that can be used once to replace the SSO settings. Recovery works with the **same issuer**. Switching to a different issuer locks existing users out, because accounts are tied to the identity provider's user ID.
+
+## Development
+
+Requirements: Java 21, Node 22, Docker (for the integration tests).
+
+```bash
+# backend: unit tests, integration tests (Testcontainers) and formatting check
+cd backend && ./mvnw verify
+
+# shared API client and web app
+npm install
+npm test -w @muninn/api
+npm run dev -w @muninn/web     # http://localhost:5173, proxies /api to localhost:8080
+npm test -w @muninn/web
+
+# phone app: tests, then a development build on a device or emulator (Expo Go is not supported)
+npm test -w @muninn/mobile
+cd mobile && npx expo run:android   # or: npx expo run:ios
+```
+
+The built web app is bundled into the backend jar (`npm run build -w @muninn/web`, then `./mvnw package`); the Docker image does both.
 
 ## Privacy and responsible use
 
