@@ -5,3 +5,4 @@ docs
 **/target
 **/node_modules
 infrastructure
+web/dist

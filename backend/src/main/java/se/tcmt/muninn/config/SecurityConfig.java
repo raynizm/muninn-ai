@@ -57,8 +57,12 @@ public class SecurityConfig {
                     .permitAll()
                     .requestMatchers("/api/settings", "/api/settings/**")
                     .hasRole("ADMIN")
+                    // Everything else under /api needs a token; the web app (static files and
+                    // client-side routes) is public.
+                    .requestMatchers("/api/**")
+                    .authenticated()
                     .anyRequest()
-                    .authenticated())
+                    .permitAll())
         .build();
   }
 }

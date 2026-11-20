@@ -3,6 +3,7 @@ package se.tcmt.muninn.controller;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -74,6 +75,12 @@ public class AuthController {
   public TokenResponse refresh(@RequestBody RefreshRequest req) {
     TokenService.TokenPair pair = tokens.refresh(req.refreshToken());
     return response(pair, tokens.verifyAccess(pair.access()));
+  }
+
+  /** Returns the signed-in user. */
+  @GetMapping("/me")
+  public UserView me(@AuthenticationPrincipal AppUser user) {
+    return new UserView(user.id(), user.email(), user.displayName(), user.role().name());
   }
 
   /** Revokes the given refresh token. */

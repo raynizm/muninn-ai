@@ -3,6 +3,7 @@ package se.tcmt.muninn.integration.controller;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.forwardedUrl;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -131,6 +132,26 @@ class AuthControllerIT extends AbstractPostgresIT {
     // Authenticated: passes security and reaches MVC, which has no such route.
     mvc.perform(get("/api/anything").header(HttpHeaders.AUTHORIZATION, "Bearer " + access))
         .andExpect(status().isNotFound());
+  }
+
+  @Test
+  void meReturnsTheSignedInUserAndNeedsAToken() throws Exception {
+    mvc.perform(get("/api/auth/me")).andExpect(status().isUnauthorized());
+
+    String access = callback("ann@acme.com").get("accessToken").asText();
+    mvc.perform(get("/api/auth/me").header(HttpHeaders.AUTHORIZATION, "Bearer " + access))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.email").value("ann@acme.com"))
+        .andExpect(jsonPath("$.role").value("USER"));
+  }
+
+  @Test
+  void webAppRoutesAreServedWithoutAuthentication() throws Exception {
+    for (String route : new String[] {"/", "/login", "/login/callback", "/setup", "/settings"}) {
+      mvc.perform(get(route)).andExpect(status().isOk()).andExpect(forwardedUrl("/index.html"));
+    }
+    mvc.perform(get("/recordings/6b2f3c52-98b5-4b6e-9d6a-7a1c9a5c2b10"))
+        .andExpect(forwardedUrl("/index.html"));
   }
 
   @Test

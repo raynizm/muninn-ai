@@ -1,4 +1,11 @@
 # Build context is the repository root (see infrastructure/docker-compose.yml).
+FROM node:22-alpine AS web
+WORKDIR /src
+COPY package.json package-lock.json ./
+COPY packages/api packages/api
+COPY web web
+RUN npm ci && npm run build -w @muninn/web
+
 FROM eclipse-temurin:21-jdk AS build
 WORKDIR /src/backend
 COPY backend/.mvn .mvn
@@ -6,6 +13,7 @@ COPY backend/mvnw backend/pom.xml ./
 RUN ./mvnw -B -q dependency:go-offline
 COPY backend/lombok.config ./
 COPY backend/src src
+COPY --from=web /src/web/dist /src/web/dist
 RUN ./mvnw -B -q -DskipTests package
 
 FROM eclipse-temurin:21-jre

@@ -1,5 +1,5 @@
 {
   "name": "muninn",
   "private": true,
-  "workspaces": ["packages/api"]
+  "workspaces": ["packages/api", "web"]
 }

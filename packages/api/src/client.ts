@@ -16,6 +16,7 @@ import type {
   TokenResponse,
   TokenStore,
   UploadOptions,
+  UserView,
 } from "./types";
 
 export class ApiError extends Error {
@@ -42,6 +43,8 @@ export interface ApiClient {
   authConfig(): Promise<AuthConfig>;
   callback(req: CallbackRequest): Promise<TokenResponse>;
   logout(): Promise<void>;
+  /** The signed-in user. */
+  me(): Promise<UserView>;
 
   setupStatus(): Promise<{ complete: boolean }>;
   verifySetupToken(token: string): Promise<{ valid: boolean }>;
@@ -176,6 +179,8 @@ export function createClient(
       }
       await tokens.set(null);
     },
+
+    me: () => json("/api/auth/me"),
 
     setupStatus: () => json("/api/setup/status", { auth: false }),
     verifySetupToken: (token) => json("/api/setup/verify", { method: "POST", auth: false, ...jsonBody({ token }) }),

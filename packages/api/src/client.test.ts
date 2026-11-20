@@ -100,4 +100,13 @@ describe("api client", () => {
     const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
     expect(new Headers(init.headers).get("Authorization")).toBeNull();
   });
+
+  it("meReturnsTheSignedInUser", async () => {
+    const user = { id: "u1", email: "a@b.se", displayName: "A", role: "USER" };
+    const fetchMock = vi.fn(async () => json(200, user));
+    const client = createClient("https://m.example", memoryStore({ accessToken: "A", refreshToken: "R" }), fetchMock);
+    expect(await client.me()).toEqual(user);
+    const [url] = fetchMock.mock.calls[0] as unknown as [string];
+    expect(url).toBe("https://m.example/api/auth/me");
+  });
 });
