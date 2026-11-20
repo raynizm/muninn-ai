@@ -12,6 +12,9 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
+import lombok.Getter;
+import lombok.RequiredArgsConstructor;
+import lombok.experimental.Accessors;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
@@ -39,6 +42,7 @@ import tools.jackson.databind.ObjectMapper;
  */
 @Service
 @Slf4j
+@RequiredArgsConstructor
 public class RecordingService {
 
   /** Phone audio is AAC in an MP4/M4A container; these are the names clients use for it. */
@@ -90,26 +94,12 @@ public class RecordingService {
   private final TransactionTemplate tx;
   private final AudioStore audio;
   private final ObjectMapper json;
-  private final long maxUploadBytes;
-
-  /** Creates the service with its collaborators and the maximum accepted upload size in bytes. */
-  public RecordingService(
-      JdbcTemplate jdbc,
-      TransactionTemplate tx,
-      AudioStore audio,
-      ObjectMapper json,
-      @Value("${muninn.max-upload-bytes}") long maxUploadBytes) {
-    this.jdbc = jdbc;
-    this.tx = tx;
-    this.audio = audio;
-    this.json = json;
-    this.maxUploadBytes = maxUploadBytes;
-  }
 
   /** The maximum accepted audio size in bytes. */
-  public long maxUploadBytes() {
-    return maxUploadBytes;
-  }
+  @Value("${muninn.max-upload-bytes}")
+  @Getter
+  @Accessors(fluent = true)
+  private final long maxUploadBytes;
 
   /** Stores an upload without a title and returns the recording. */
   public Recording upload(

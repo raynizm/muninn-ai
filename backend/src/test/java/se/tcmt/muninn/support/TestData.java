@@ -3,10 +3,10 @@ package se.tcmt.muninn.support;
 import java.security.MessageDigest;
 import java.util.HexFormat;
 import java.util.Random;
+import lombok.experimental.UtilityClass;
 
-public final class TestData {
-
-  private TestData() {}
+@UtilityClass
+public class TestData {
 
   public static byte[] bytes(int n, long seed) {
     byte[] b = new byte[n];

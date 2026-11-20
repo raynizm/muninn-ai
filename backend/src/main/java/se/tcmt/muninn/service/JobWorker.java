@@ -4,8 +4,8 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
@@ -27,6 +27,7 @@ import se.tcmt.muninn.model.ProcessingStatus;
  */
 @Component
 @Slf4j
+@RequiredArgsConstructor
 public class JobWorker {
 
   static final List<Duration> BACKOFF =
@@ -37,27 +38,12 @@ public class JobWorker {
   private final TransactionTemplate tx;
   private final ProcessingPipeline pipeline;
   private final RecordingService recordings;
+
+  /** Age after which a RUNNING job is considered abandoned and is reclaimed. */
+  @Value("${muninn.job-timeout:30m}")
   private final Duration jobTimeout;
 
   private record Claimed(UUID id, UUID recordingId, int attempts) {}
-
-  /**
-   * Creates the worker with its collaborators and the job timeout after which a RUNNING job is
-   * reclaimed.
-   */
-  @Autowired
-  public JobWorker(
-      JdbcTemplate jdbc,
-      TransactionTemplate tx,
-      ProcessingPipeline pipeline,
-      RecordingService recordings,
-      @Value("${muninn.job-timeout:30m}") Duration jobTimeout) {
-    this.jdbc = jdbc;
-    this.tx = tx;
-    this.pipeline = pipeline;
-    this.recordings = recordings;
-    this.jobTimeout = jobTimeout;
-  }
 
   /** Claims and runs at most one due job. Returns whether a job was run. Never throws. */
   public boolean runOnce() {
