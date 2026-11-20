@@ -130,7 +130,7 @@ Voice recordings contain sensitive information, often about other people. Muninn
 
 Issues and pull requests are welcome. Commit messages are lowercase and start with `feat:`, `fix:`, `refactor:` or `chore:`.
 
-Java code is formatted with [Spotless](https://github.com/diffplug/spotless) (Palantir Java Format). `./mvnw verify` fails if code is not formatted, so run this before you commit:
+Java code is formatted with [Spotless](https://github.com/diffplug/spotless). `./mvnw verify` fails if code is not formatted, so run this before you commit:
 
 ```bash
 cd backend
