@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -26,13 +27,10 @@ import se.tcmt.muninn.service.ProviderService;
 /** Provider CRUD for the signed-in user; anything not owned (or SYSTEM for non-admins) answers 404. */
 @RestController
 @RequestMapping("/api")
+@RequiredArgsConstructor
 public class ProviderController {
 
     private final ProviderService service;
-
-    public ProviderController(ProviderService service) {
-        this.service = service;
-    }
 
     public record LastTest(boolean ok, String message, Instant at) {}
 

@@ -9,6 +9,7 @@ import java.time.Instant;
 import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.UUID;
+import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -44,15 +45,11 @@ import tools.jackson.databind.JsonNode;
  */
 @RestController
 @RequestMapping("/api/recordings")
+@RequiredArgsConstructor
 public class RecordingController {
 
     private final RecordingService service;
     private final AudioStore audio;
-
-    public RecordingController(RecordingService service, AudioStore audio) {
-        this.service = service;
-        this.audio = audio;
-    }
 
     public record RecordingView(
             UUID id,

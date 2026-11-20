@@ -7,8 +7,8 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -35,6 +35,8 @@ import tools.jackson.databind.ObjectMapper;
  * pipeline just stops). Failures surface as {@link ProcessingException}s with short, authored messages.
  */
 @Service
+@Slf4j
+@RequiredArgsConstructor
 public class ProcessingPipeline {
 
     static final String NO_PROVIDER = "No AI provider configured";
@@ -59,7 +61,6 @@ public class ProcessingPipeline {
             an empty array if there are none.
             Do not wrap the JSON in markdown and do not add any other text.""";
 
-    private static final Logger log = LoggerFactory.getLogger(ProcessingPipeline.class);
     private static final Pattern HTTP_STATUS = Pattern.compile("HTTP (\\d{3})");
     private static final Pattern TRANSCRIPT_TAG = Pattern.compile("(?i)<\\s*/?\\s*transcript\\s*>");
 
@@ -72,27 +73,6 @@ public class ProcessingPipeline {
     private final ChatAdapter chat;
     private final SummaryParser parser;
     private final ObjectMapper json;
-
-    public ProcessingPipeline(
-            JdbcTemplate jdbc,
-            TransactionTemplate tx,
-            RecordingService recordings,
-            AudioStore audio,
-            ProviderService providers,
-            TranscriptionAdapter transcription,
-            ChatAdapter chat,
-            SummaryParser parser,
-            ObjectMapper json) {
-        this.jdbc = jdbc;
-        this.tx = tx;
-        this.recordings = recordings;
-        this.audio = audio;
-        this.providers = providers;
-        this.transcription = transcription;
-        this.chat = chat;
-        this.parser = parser;
-        this.json = json;
-    }
 
     /**
      * Brings the recording to COMPLETED, doing only the missing steps. Returns quietly if the recording does not

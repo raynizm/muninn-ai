@@ -1,7 +1,7 @@
 package se.tcmt.muninn.config;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.annotation.EnableScheduling;
@@ -16,15 +16,11 @@ import se.tcmt.muninn.service.JobWorker;
 @Configuration(proxyBeanMethods = false)
 @EnableScheduling
 @ConditionalOnProperty(name = "muninn.worker.enabled", havingValue = "true", matchIfMissing = true)
+@Slf4j
+@RequiredArgsConstructor
 class JobScheduling {
 
-    private static final Logger log = LoggerFactory.getLogger(JobScheduling.class);
-
     private final JobWorker worker;
-
-    JobScheduling(JobWorker worker) {
-        this.worker = worker;
-    }
 
     @Scheduled(initialDelay = 2000, fixedDelay = 2000)
     void poll() {

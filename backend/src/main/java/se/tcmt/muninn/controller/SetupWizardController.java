@@ -2,6 +2,7 @@ package se.tcmt.muninn.controller;
 
 import java.util.Map;
 import java.util.UUID;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -23,15 +24,12 @@ import se.tcmt.muninn.service.SetupWizardService;
  */
 @RestController
 @RequestMapping("/api/setup")
+@RequiredArgsConstructor
 public class SetupWizardController {
 
     static final String TOKEN_HEADER = "X-Setup-Token";
 
     private final SetupWizardService wizard;
-
-    public SetupWizardController(SetupWizardService wizard) {
-        this.wizard = wizard;
-    }
 
     public record ModelsRequest(UUID chatModelId, UUID transcriptionModelId) {}
 

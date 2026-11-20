@@ -2,6 +2,7 @@ package se.tcmt.muninn.service;
 
 import java.util.List;
 import java.util.UUID;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -10,6 +11,7 @@ import se.tcmt.muninn.model.TaskType;
 
 /** Admin-editable instance settings. Access control (ADMIN only) is enforced in {@code SecurityConfig}. */
 @Service
+@RequiredArgsConstructor
 public class SettingsService {
 
     /** Never carries the OIDC client secret. */
@@ -33,12 +35,6 @@ public class SettingsService {
     private final AuthSettings auth;
     private final ProviderService providers;
     private final TransactionTemplate tx;
-
-    public SettingsService(AuthSettings auth, ProviderService providers, TransactionTemplate tx) {
-        this.auth = auth;
-        this.providers = providers;
-        this.tx = tx;
-    }
 
     public SettingsView get() {
         return new SettingsView(

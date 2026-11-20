@@ -2,6 +2,7 @@ package se.tcmt.muninn.config;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
@@ -16,13 +17,10 @@ import se.tcmt.muninn.service.SetupService;
  * The service re-check the setup state; this is the outer layer.
  */
 @Configuration
+@RequiredArgsConstructor
 class SetupCompleteGuard implements WebMvcConfigurer, HandlerInterceptor {
 
     private final SetupService setup;
-
-    SetupCompleteGuard(SetupService setup) {
-        this.setup = setup;
-    }
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {

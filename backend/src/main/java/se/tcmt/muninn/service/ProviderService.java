@@ -10,6 +10,7 @@ import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.regex.Pattern;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
@@ -36,6 +37,7 @@ import tools.jackson.databind.ObjectMapper;
  * provider (admin only); USER providers belong to {@code owner_user_id}.
  */
 @Service
+@RequiredArgsConstructor
 public class ProviderService {
 
     static final String SETTING_OVERRIDE = "settings.userOverrideEnabled";
@@ -70,12 +72,6 @@ public class ProviderService {
     private final JdbcTemplate jdbc;
     private final SecretCipher cipher;
     private final ModelDiscoveryAdapter discovery;
-
-    public ProviderService(JdbcTemplate jdbc, SecretCipher cipher, ModelDiscoveryAdapter discovery) {
-        this.jdbc = jdbc;
-        this.cipher = cipher;
-        this.discovery = discovery;
-    }
 
     /** {@code ownerOrNull == null} creates the SYSTEM (GLOBAL) provider; the caller must have checked admin. */
     public AiProvider create(UUID ownerOrNull, ProviderRequest r) {

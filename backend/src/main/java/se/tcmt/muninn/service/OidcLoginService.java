@@ -8,8 +8,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -42,9 +41,9 @@ import se.tcmt.muninn.repository.UserRepository;
  * (JWKS signature, iss, aud, azp, exp) and run through {@link DomainPolicy} before any user is created.
  */
 @Service
+@Slf4j
 public class OidcLoginService {
 
-    private static final Logger log = LoggerFactory.getLogger(OidcLoginService.class);
     private static final ParameterizedTypeReference<Map<String, Object>> JSON_MAP =
             new ParameterizedTypeReference<>() {};
 

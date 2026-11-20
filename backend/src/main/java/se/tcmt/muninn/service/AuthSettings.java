@@ -10,6 +10,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
@@ -18,6 +19,7 @@ import se.tcmt.muninn.crypto.SecretCipher;
 
 /** Reads auth configuration from app_setting. Secrets are stored encrypted with {@link SecretCipher}. */
 @Component
+@RequiredArgsConstructor
 public class AuthSettings {
 
     static final String ISSUER = "oidc.issuer";
@@ -34,11 +36,6 @@ public class AuthSettings {
     private final JdbcTemplate jdbc;
     private final SecretCipher cipher;
     private final SecureRandom random = new SecureRandom();
-
-    public AuthSettings(JdbcTemplate jdbc, SecretCipher cipher) {
-        this.jdbc = jdbc;
-        this.cipher = cipher;
-    }
 
     public record Oidc(String issuer, String clientId, String clientSecret) {
         @Override

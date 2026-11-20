@@ -1,6 +1,7 @@
 package se.tcmt.muninn.controller;
 
 import java.util.Map;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -12,13 +13,10 @@ import se.tcmt.muninn.service.SetupService;
 
 @RestController
 @RequestMapping("/api/setup")
+@RequiredArgsConstructor
 public class SetupController {
 
     private final SetupService setup;
-
-    public SetupController(SetupService setup) {
-        this.setup = setup;
-    }
 
     @GetMapping("/status")
     public Map<String, Boolean> status() {

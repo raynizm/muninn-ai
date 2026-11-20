@@ -3,6 +3,7 @@ package se.tcmt.muninn.repository;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
+import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
@@ -11,6 +12,7 @@ import se.tcmt.muninn.model.AppUser;
 
 /** app_user access. Emails are stored lower-cased; they are the account identity. */
 @Repository
+@RequiredArgsConstructor
 public class UserRepository {
 
     private static final RowMapper<AppUser> MAPPER = (rs, i) -> new AppUser(
@@ -20,10 +22,6 @@ public class UserRepository {
             AppUser.Role.valueOf(rs.getString("role")));
 
     private final JdbcTemplate jdbc;
-
-    public UserRepository(JdbcTemplate jdbc) {
-        this.jdbc = jdbc;
-    }
 
     public Optional<AppUser> findById(UUID id) {
         return jdbc.query("select * from app_user where id = ?", MAPPER, id).stream()

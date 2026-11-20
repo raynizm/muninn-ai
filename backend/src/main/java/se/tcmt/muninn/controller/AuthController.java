@@ -1,6 +1,7 @@
 package se.tcmt.muninn.controller;
 
 import java.util.UUID;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -16,6 +17,7 @@ import se.tcmt.muninn.service.TokenService;
 
 @RestController
 @RequestMapping("/api/auth")
+@RequiredArgsConstructor
 public class AuthController {
 
     private static final long ACCESS_TTL_SECONDS = TokenService.ACCESS_TTL.toSeconds();
@@ -23,12 +25,6 @@ public class AuthController {
     private final OidcLoginService login;
     private final TokenService tokens;
     private final AuthSettings settings;
-
-    public AuthController(OidcLoginService login, TokenService tokens, AuthSettings settings) {
-        this.login = login;
-        this.tokens = tokens;
-        this.settings = settings;
-    }
 
     public record ConfigResponse(String issuer, String clientId, String authorizationEndpoint) {}
 

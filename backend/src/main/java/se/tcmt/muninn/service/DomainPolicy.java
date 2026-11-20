@@ -2,17 +2,15 @@ package se.tcmt.muninn.service;
 
 import java.util.Locale;
 import java.util.Optional;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 /** Decides whether an identity from the IdP may use this instance. Deny by default. */
 @Component
+@RequiredArgsConstructor
 public class DomainPolicy {
 
     private final AuthSettings settings;
-
-    public DomainPolicy(AuthSettings settings) {
-        this.settings = settings;
-    }
 
     /**
      * @param email         email claim from a validated ID token

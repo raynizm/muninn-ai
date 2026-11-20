@@ -4,8 +4,7 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -25,13 +24,12 @@ import se.tcmt.muninn.model.ProcessingStatus;
  * job and the recording become FAILED. {@code last_error} only ever holds authored, secret-free messages.
  */
 @Component
+@Slf4j
 public class JobWorker {
 
     static final List<Duration> BACKOFF =
             List.of(Duration.ofSeconds(30), Duration.ofMinutes(2), Duration.ofMinutes(10));
     static final String GENERIC_FAILURE = "Processing failed";
-
-    private static final Logger log = LoggerFactory.getLogger(JobWorker.class);
 
     private final JdbcTemplate jdbc;
     private final TransactionTemplate tx;

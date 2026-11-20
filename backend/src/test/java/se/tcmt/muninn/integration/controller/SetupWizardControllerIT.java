@@ -261,8 +261,7 @@ class SetupWizardControllerIT extends AbstractPostgresIT {
                 .andExpect(status().isNotFound());
         mvc.perform(bearer(withJson(post("/api/setup/provider"), Map.of("name", "x", "baseUrl", AI.baseUrl())), admin))
                 .andExpect(status().isNotFound());
-        mvc.perform(bearer(withJson(post("/api/setup/model"), Map.of()), admin))
-                .andExpect(status().isNotFound());
+        mvc.perform(bearer(withJson(post("/api/setup/model"), Map.of()), admin)).andExpect(status().isNotFound());
         mvc.perform(bearer(post("/api/setup/finish"), admin)).andExpect(status().isNotFound());
         mvc.perform(withJson(post("/api/setup/verify"), Map.of("token", token))).andExpect(status().isNotFound());
         // Malformed body still 404: nothing about the endpoint leaks after completion.

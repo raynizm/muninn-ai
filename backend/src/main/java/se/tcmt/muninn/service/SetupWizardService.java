@@ -5,6 +5,7 @@ import java.net.URISyntaxException;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -25,6 +26,7 @@ import se.tcmt.muninn.model.TaskType;
  * After completion only {@code recoverSso} works, with a single-use recovery token.
  */
 @Service
+@RequiredArgsConstructor
 public class SetupWizardService {
 
     public record SsoView(String issuer, String clientId, List<String> allowedDomains, String tenantId) {}
@@ -36,14 +38,6 @@ public class SetupWizardService {
     private final AuthSettings auth;
     private final ProviderService providers;
     private final TransactionTemplate tx;
-
-    public SetupWizardService(
-            SetupService setup, AuthSettings auth, ProviderService providers, TransactionTemplate tx) {
-        this.setup = setup;
-        this.auth = auth;
-        this.providers = providers;
-        this.tx = tx;
-    }
 
     public SsoView saveSso(String setupToken, SsoRequest req) {
         requireIncomplete();
