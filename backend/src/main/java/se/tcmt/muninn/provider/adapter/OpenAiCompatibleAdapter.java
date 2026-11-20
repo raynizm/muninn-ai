@@ -47,7 +47,7 @@ public class OpenAiCompatibleAdapter
   @Override
   public List<DiscoveredModel> discover(ProviderConnection c) {
     try {
-      JsonNode root = get(c, "/v1/model");
+      JsonNode root = get(c, "/v1/models");
       List<DiscoveredModel> out = new ArrayList<>();
       for (JsonNode m : root.path("data")) {
         String id = m.path("id").asText("");
@@ -66,7 +66,7 @@ public class OpenAiCompatibleAdapter
   public ConnectionTestResult test(ProviderConnection c) {
     try {
       int n = discover(c).size();
-      return new ConnectionTestResult(true, "ok, " + n + " model");
+      return new ConnectionTestResult(true, "ok, " + n + " models");
     } catch (ResponseStatusException e) {
       return new ConnectionTestResult(false, e.getReason());
     }

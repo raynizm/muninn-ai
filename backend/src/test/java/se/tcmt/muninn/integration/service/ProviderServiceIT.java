@@ -202,7 +202,7 @@ class ProviderServiceIT extends AbstractPostgresIT {
     call(ann, "DELETE", "/api/providers/" + id, null).andExpect(status().isNotFound());
     call(ann, "POST", "/api/providers/" + id + "/test", null).andExpect(status().isNotFound());
     call(ann, "POST", "/api/providers/" + id + "/discover", null).andExpect(status().isNotFound());
-    call(ann, "GET", "/api/providers/" + id + "/model", null).andExpect(status().isNotFound());
+    call(ann, "GET", "/api/providers/" + id + "/models", null).andExpect(status().isNotFound());
     assertThat(body(call(ann, "GET", "/api/providers", null), 200)).isEmpty();
     assertThat(body(call(admin, "GET", "/api/providers", null), 200)).hasSize(1);
     call(admin, "GET", "/api/providers/" + id, null).andExpect(status().isOk());
@@ -225,7 +225,7 @@ class ProviderServiceIT extends AbstractPostgresIT {
     call(bob, "GET", "/api/providers/" + id, null).andExpect(status().isNotFound());
     call(bob, "POST", "/api/providers/" + id + "/test", null).andExpect(status().isNotFound());
     call(bob, "POST", "/api/providers/" + id + "/discover", null).andExpect(status().isNotFound());
-    call(bob, "GET", "/api/providers/" + id + "/model", null).andExpect(status().isNotFound());
+    call(bob, "GET", "/api/providers/" + id + "/models", null).andExpect(status().isNotFound());
     call(bob, "DELETE", "/api/providers/" + id, null).andExpect(status().isNotFound());
     assertThat(AI.requests()).isEmpty();
     // Admin has no access to a USER-scope provider either.
@@ -354,12 +354,12 @@ class ProviderServiceIT extends AbstractPostgresIT {
         call(
             ann,
             "PUT",
-            "/api/model/" + modelId,
+            "/api/models/" + modelId,
             Map.of("capabilities", java.util.List.of("transcription", "json"), "enabled", false)),
         200);
     JsonNode again = body(call(ann, "POST", "/api/providers/" + id + "/discover", null), 200);
     assertThat(again).hasSize(3);
-    JsonNode listed = body(call(ann, "GET", "/api/providers/" + id + "/model", null), 200);
+    JsonNode listed = body(call(ann, "GET", "/api/providers/" + id + "/models", null), 200);
     for (JsonNode m : listed) {
       if (m.get("id").asText().equals(modelId)) {
         assertThat(m.get("capabilities")).hasSize(2);
@@ -369,7 +369,7 @@ class ProviderServiceIT extends AbstractPostgresIT {
     call(
             bob,
             "PUT",
-            "/api/model/" + modelId,
+            "/api/models/" + modelId,
             Map.of("capabilities", java.util.List.of("chat"), "enabled", true))
         .andExpect(status().isNotFound());
   }

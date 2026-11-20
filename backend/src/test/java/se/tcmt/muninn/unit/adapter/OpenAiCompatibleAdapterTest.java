@@ -39,7 +39,7 @@ class OpenAiCompatibleAdapterTest {
     assertThat(models)
         .extracting(DiscoveredModel::capabilities)
         .containsExactly(List.of("chat"), List.of("transcription"), List.of("embeddings"));
-    assertThat(SERVER.last().path()).isEqualTo("/v1/model");
+    assertThat(SERVER.last().path()).isEqualTo("/v1/models");
   }
 
   @Test

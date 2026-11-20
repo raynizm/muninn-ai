@@ -18,7 +18,7 @@ import java.util.concurrent.TimeUnit;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * In-process OpenAI-compatible server: /v1/model, /v1/chat/completions, /v1/audio/transcriptions.
+ * In-process OpenAI-compatible server: /v1/models, /v1/chat/completions, /v1/audio/transcriptions.
  * Responses can be overridden per path, and a request can be held mid-flight with {@link #hold} to
  * observe in-progress state.
  */
@@ -31,7 +31,7 @@ public final class FakeOpenAi implements AutoCloseable {
   private static final ObjectMapper JSON = new ObjectMapper();
   private static final Map<String, String> DEFAULTS =
       Map.of(
-          "/v1/model",
+          "/v1/models",
               """
                     {"object":"list","data":[{"id":"gpt-4o-mini"},{"id":"whisper-1"},{"id":"text-embedding-3-small"}]}""",
           "/v1/chat/completions",

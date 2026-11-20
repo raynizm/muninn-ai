@@ -219,7 +219,7 @@ class SetupWizardControllerIT extends AbstractPostgresIT {
     mvc.perform(
             bearer(
                 withJson(
-                    post("/api/setup/model"),
+                    post("/api/setup/models"),
                     Map.of(
                         "chatModelId", models.get("gpt-4o-mini"),
                         "transcriptionModelId", models.get("whisper-1"))),
@@ -275,7 +275,7 @@ class SetupWizardControllerIT extends AbstractPostgresIT {
                 withJson(post("/api/setup/provider"), Map.of("name", "x", "baseUrl", AI.baseUrl())),
                 admin))
         .andExpect(status().isNotFound());
-    mvc.perform(bearer(withJson(post("/api/setup/model"), Map.of()), admin))
+    mvc.perform(bearer(withJson(post("/api/setup/models"), Map.of()), admin))
         .andExpect(status().isNotFound());
     mvc.perform(bearer(post("/api/setup/finish"), admin)).andExpect(status().isNotFound());
     mvc.perform(withJson(post("/api/setup/verify"), Map.of("token", token)))
@@ -283,7 +283,7 @@ class SetupWizardControllerIT extends AbstractPostgresIT {
     // Malformed body still 404: nothing about the endpoint leaks after completion.
     mvc.perform(
             bearer(
-                post("/api/setup/model").contentType(MediaType.APPLICATION_JSON).content("{nope"),
+                post("/api/setup/models").contentType(MediaType.APPLICATION_JSON).content("{nope"),
                 admin))
         .andExpect(status().isNotFound());
     assertThat(setting("oidc.clientId")).isEqualTo(FakeIdp.CLIENT_ID);
@@ -340,7 +340,7 @@ class SetupWizardControllerIT extends AbstractPostgresIT {
     String user = access("ann@acme.com", AppUser.Role.USER);
     Map<String, String> provider = Map.of("name", "OpenAI", "baseUrl", AI.baseUrl());
 
-    for (String path : List.of("/api/setup/provider", "/api/setup/model", "/api/setup/finish")) {
+    for (String path : List.of("/api/setup/provider", "/api/setup/models", "/api/setup/finish")) {
       mvc.perform(withJson(post(path), provider)).andExpect(status().isUnauthorized());
       mvc.perform(withJson(post(path), provider).header(HEADER, token))
           .andExpect(status().isUnauthorized());
@@ -371,7 +371,7 @@ class SetupWizardControllerIT extends AbstractPostgresIT {
                 "chatModelId", foreign.toString(), "transcriptionModelId", models.get("whisper-1")),
             Map.of("chatModelId", models.get("gpt-4o-mini")),
             Map.of("chatModelId", "nope", "transcriptionModelId", models.get("whisper-1")))) {
-      mvc.perform(bearer(withJson(post("/api/setup/model"), bad), admin))
+      mvc.perform(bearer(withJson(post("/api/setup/models"), bad), admin))
           .andExpect(status().isBadRequest());
     }
     assertThat(setting("settings.defaultChatModelId")).isNull();
@@ -379,7 +379,7 @@ class SetupWizardControllerIT extends AbstractPostgresIT {
     mvc.perform(
             bearer(
                 withJson(
-                    post("/api/setup/model"),
+                    post("/api/setup/models"),
                     Map.of(
                         "chatModelId", models.get("gpt-4o-mini"),
                         "transcriptionModelId", models.get("whisper-1"))),
@@ -455,7 +455,7 @@ class SetupWizardControllerIT extends AbstractPostgresIT {
             withJson(post("/api/setup/provider"), Map.of("name", "x", "baseUrl", AI.baseUrl()))
                 .header(HEADER, recovery))
         .andExpect(status().isNotFound());
-    mvc.perform(withJson(post("/api/setup/model"), Map.of()).header(HEADER, recovery))
+    mvc.perform(withJson(post("/api/setup/models"), Map.of()).header(HEADER, recovery))
         .andExpect(status().isNotFound());
     mvc.perform(post("/api/setup/finish").header(HEADER, recovery))
         .andExpect(status().isNotFound());

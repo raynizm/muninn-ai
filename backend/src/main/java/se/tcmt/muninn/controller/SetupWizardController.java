@@ -59,7 +59,7 @@ public class SetupWizardController {
   }
 
   /** Sets the default chat and transcription models. */
-  @PostMapping("/model")
+  @PostMapping("/models")
   public ModelsRequest models(
       @AuthenticationPrincipal AppUser user, @RequestBody(required = false) ModelsRequest req) {
     ModelsRequest r = req == null ? new ModelsRequest(null, null) : req;

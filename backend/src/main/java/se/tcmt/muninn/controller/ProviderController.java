@@ -122,14 +122,14 @@ public class ProviderController {
   }
 
   /** Lists the stored models of a provider. */
-  @GetMapping("/providers/{id}/model")
+  @GetMapping("/providers/{id}/models")
   public List<ModelView> models(@AuthenticationPrincipal AppUser user, @PathVariable UUID id) {
     service.requireManageable(user, id);
     return service.models(id).stream().map(ProviderController::view).toList();
   }
 
   /** Updates the capabilities or enabled flag of a model. */
-  @PutMapping("/model/{id}")
+  @PutMapping("/models/{id}")
   public ModelView updateModel(
       @AuthenticationPrincipal AppUser user, @PathVariable UUID id, @RequestBody ModelUpdate req) {
     service.requireManageableModel(user, id);

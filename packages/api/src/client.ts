@@ -199,7 +199,7 @@ export function createClient(
         body: JSON.stringify(sso),
       }),
     createSystemProvider: (input) => json("/api/setup/provider", { method: "POST", ...jsonBody(input) }),
-    setDefaultModels: (models) => json("/api/setup/model", { method: "POST", ...jsonBody(models) }),
+    setDefaultModels: (models) => json("/api/setup/models", { method: "POST", ...jsonBody(models) }),
     finishSetup: () => json("/api/setup/finish", { method: "POST" }),
 
     listRecordings: (updatedSince) =>
@@ -227,8 +227,8 @@ export function createClient(
     },
     testProvider: (id) => json(`/api/providers/${id}/test`, { method: "POST" }),
     discoverModels: (id) => json(`/api/providers/${id}/discover`, { method: "POST" }),
-    listModels: (id) => json(`/api/providers/${id}/model`),
-    updateModel: (id, update) => json(`/api/model/${id}`, { method: "PUT", ...jsonBody(update) }),
+    listModels: (id) => json(`/api/providers/${id}/models`),
+    updateModel: (id, update) => json(`/api/models/${id}`, { method: "PUT", ...jsonBody(update) }),
 
     getSettings: () => json("/api/settings"),
     updateSettings: (update) => json("/api/settings", { method: "PUT", ...jsonBody(update) }),
