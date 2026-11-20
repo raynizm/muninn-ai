@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack } from "expo-router";
 import { useEffect } from "react";
+import { useUploadTriggers } from "../hooks/useUploadTriggers";
 import { useSession } from "../stores/session";
 
 const queryClient = new QueryClient();
@@ -8,6 +9,8 @@ const queryClient = new QueryClient();
 export default function RootLayout() {
   const status = useSession((s) => s.status);
   const init = useSession((s) => s.init);
+  const serverUrl = useSession((s) => s.serverUrl);
+  useUploadTriggers(serverUrl, status === "signedIn");
 
   useEffect(() => {
     void init();
