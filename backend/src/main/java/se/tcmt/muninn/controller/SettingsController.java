@@ -16,15 +16,17 @@ import se.tcmt.muninn.service.SettingsService.SettingsView;
 @RequiredArgsConstructor
 public class SettingsController {
 
-    private final SettingsService settings;
+  private final SettingsService settings;
 
-    @GetMapping
-    public SettingsView get() {
-        return settings.get();
-    }
+  /** Returns the current system settings. */
+  @GetMapping
+  public SettingsView get() {
+    return settings.get();
+  }
 
-    @PutMapping
-    public SettingsView put(@RequestBody SettingsUpdate update) {
-        return settings.update(update);
-    }
+  /** Updates the system settings and returns the result. */
+  @PutMapping
+  public SettingsView put(@RequestBody SettingsUpdate update) {
+    return settings.update(update);
+  }
 }

@@ -16,28 +16,30 @@ import se.tcmt.muninn.service.SetupService;
 @RequiredArgsConstructor
 public class SetupController {
 
-    private final SetupService setup;
+  private final SetupService setup;
 
-    @GetMapping("/status")
-    public Map<String, Boolean> status() {
-        return Map.of("complete", setup.isComplete());
+  /** Reports whether first-run setup is complete. */
+  @GetMapping("/status")
+  public Map<String, Boolean> status() {
+    return Map.of("complete", setup.isComplete());
+  }
+
+  public record TokenRequest(String token) {}
+
+  /** Checks a setup token; 401 when invalid and 404 once setup is complete. */
+  @PostMapping("/verify")
+  public Map<String, Boolean> verify(@RequestBody TokenRequest request) {
+    requireIncomplete();
+    if (!setup.verifyToken(request.token())) {
+      throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "invalid setup token");
     }
+    return Map.of("valid", true);
+  }
 
-    public record TokenRequest(String token) {}
-
-    @PostMapping("/verify")
-    public Map<String, Boolean> verify(@RequestBody TokenRequest request) {
-        requireIncomplete();
-        if (!setup.verifyToken(request.token())) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "invalid setup token");
-        }
-        return Map.of("valid", true);
+  /** Every setup endpoint except status must call this first. */
+  private void requireIncomplete() {
+    if (setup.isComplete()) {
+      throw new ResponseStatusException(HttpStatus.NOT_FOUND);
     }
-
-    /** Every setup endpoint except status must call this first. */
-    private void requireIncomplete() {
-        if (setup.isComplete()) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND);
-        }
-    }
+  }
 }

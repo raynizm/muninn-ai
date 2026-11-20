@@ -4,5 +4,6 @@ import java.nio.file.Path;
 
 public interface TranscriptionAdapter {
 
-    TranscriptResult transcribe(ProviderConnection connection, Path audio, String model);
+  /** Transcribes an audio file with the given model. */
+  TranscriptResult transcribe(ProviderConnection connection, Path audio, String model);
 }

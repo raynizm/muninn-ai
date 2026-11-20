@@ -43,310 +43,323 @@ import se.tcmt.muninn.support.FakeIdp;
 @ExtendWith(OutputCaptureExtension.class)
 class OidcLoginServiceIT extends AbstractPostgresIT {
 
-    private static final FakeIdp IDP = FakeIdp.start();
-    private static final String VERIFIER = "pkce-verifier-0123456789";
-    private static final String REDIRECT = "http://localhost:5173/auth/callback";
-    private static final String TENANT = "6f1c2c3a-0000-4a6e-9b1e-1234567890ab";
+  private static final FakeIdp IDP = FakeIdp.start();
+  private static final String VERIFIER = "pkce-verifier-0123456789";
+  private static final String REDIRECT = "http://localhost:5173/auth/callback";
+  private static final String TENANT = "6f1c2c3a-0000-4a6e-9b1e-1234567890ab";
 
-    @Autowired
-    OidcLoginService login;
+  @Autowired OidcLoginService login;
 
-    @Autowired
-    TokenService tokens;
+  @Autowired TokenService tokens;
 
-    @Autowired
-    SetupService setup;
+  @Autowired SetupService setup;
 
-    @Autowired
-    SecretCipher cipher;
+  @Autowired SecretCipher cipher;
 
-    @Autowired
-    JdbcTemplate jdbc;
+  @Autowired JdbcTemplate jdbc;
 
-    @AfterAll
-    static void stopIdp() {
-        IDP.close();
+  @AfterAll
+  static void stopIdp() {
+    IDP.close();
+  }
+
+  @BeforeEach
+  void reset() {
+    jdbc.update("delete from app_user");
+    jdbc.update("delete from app_setting");
+    IDP.seedSettings(jdbc, cipher, "acme.com", null);
+  }
+
+  private String code(JWTClaimsSet claims) {
+    return IDP.codeFor(IDP.sign(claims));
+  }
+
+  private int userCount() {
+    return jdbc.queryForObject("select count(*) from app_user", Integer.class);
+  }
+
+  private static void assertStatus(HttpStatus expected, ThrowingCallable call) {
+    assertThatThrownBy(call)
+        .isInstanceOfSatisfying(
+            ResponseStatusException.class, e -> assertThat(e.getStatusCode()).isEqualTo(expected));
+  }
+
+  @Test
+  void createsUserOnFirstLogin() {
+    setup.markComplete();
+
+    OidcLoginService.LoginResult result =
+        login.login(code(IDP.validClaims("Ann@Acme.com").build()), VERIFIER, REDIRECT);
+
+    AppUser user = result.user();
+    assertThat(user.email()).isEqualTo("ann@acme.com");
+    assertThat(user.displayName()).isEqualTo("Test User");
+    assertThat(user.role()).isEqualTo(AppUser.Role.USER);
+    assertThat(userCount()).isEqualTo(1);
+    assertThat(tokens.verifyAccess(result.tokens().access()).id()).isEqualTo(user.id());
+    assertThat(result.tokens().refresh()).isNotBlank();
+
+    assertThat(IDP.lastTokenRequest())
+        .containsEntry("grant_type", "authorization_code")
+        .containsEntry("code_verifier", VERIFIER)
+        .containsEntry("redirect_uri", REDIRECT)
+        .containsEntry("client_id", FakeIdp.CLIENT_ID)
+        .containsEntry("client_secret", FakeIdp.CLIENT_SECRET);
+
+    AppUser again =
+        login.login(code(IDP.validClaims("ann@acme.com").build()), VERIFIER, REDIRECT).user();
+    assertThat(again.id()).isEqualTo(user.id());
+    assertThat(userCount()).isEqualTo(1);
+  }
+
+  @Test
+  void existingAdminKeepsRole() {
+    setup.markComplete();
+    jdbc.update(
+        "insert into app_user(id, email, role) values (?, 'boss@acme.com', 'ADMIN')",
+        UUID.randomUUID());
+
+    AppUser user =
+        login.login(code(IDP.validClaims("boss@acme.com").build()), VERIFIER, REDIRECT).user();
+
+    assertThat(user.role()).isEqualTo(AppUser.Role.ADMIN);
+  }
+
+  @Test
+  void sameEmailWithDifferentSubjectIsRejected() {
+    setup.markComplete();
+    AppUser ann =
+        login.login(code(IDP.validClaims("ann@acme.com").build()), VERIFIER, REDIRECT).user();
+
+    // Recycled or edited address: same email, different IdP subject.
+    assertStatus(
+        HttpStatus.FORBIDDEN,
+        () ->
+            login.login(
+                code(IDP.validClaims("Ann@acme.com").subject("someone-else").build()),
+                VERIFIER,
+                REDIRECT));
+
+    assertThat(userCount()).isEqualTo(1);
+    assertThat(
+            login
+                .login(code(IDP.validClaims("ann@acme.com").build()), VERIFIER, REDIRECT)
+                .user()
+                .id())
+        .isEqualTo(ann.id());
+  }
+
+  @Test
+  void sameSubjectWithChangedEmailKeepsAccount() {
+    setup.markComplete();
+    AppUser first =
+        login.login(code(IDP.validClaims("ann@acme.com").build()), VERIFIER, REDIRECT).user();
+
+    AppUser again =
+        login
+            .login(
+                code(IDP.validClaims("ann.new@acme.com").subject("sub-ann@acme.com").build()),
+                VERIFIER,
+                REDIRECT)
+            .user();
+
+    assertThat(again.id()).isEqualTo(first.id());
+    assertThat(userCount()).isEqualTo(1);
+  }
+
+  @Test
+  void legacyRowWithoutSubjectIsBoundOnce() {
+    setup.markComplete();
+    UUID legacyId = UUID.randomUUID();
+    jdbc.update(
+        "insert into app_user(id, email, role) values (?, 'boss@acme.com', 'ADMIN')", legacyId);
+
+    AppUser user =
+        login.login(code(IDP.validClaims("boss@acme.com").build()), VERIFIER, REDIRECT).user();
+
+    assertThat(user.id()).isEqualTo(legacyId);
+    assertThat(
+            jdbc.queryForMap(
+                "select oidc_issuer, oidc_subject from app_user where id = ?", legacyId))
+        .containsEntry("oidc_issuer", IDP.issuer())
+        .containsEntry("oidc_subject", "sub-boss@acme.com");
+    assertStatus(
+        HttpStatus.FORBIDDEN,
+        () ->
+            login.login(
+                code(IDP.validClaims("boss@acme.com").subject("other-sub").build()),
+                VERIFIER,
+                REDIRECT));
+  }
+
+  @Test
+  void concurrentFirstLoginsCreateOneUser() throws Exception {
+    setup.markComplete();
+    List<Callable<UUID>> calls = new ArrayList<>();
+    for (int i = 0; i < 8; i++) {
+      String c = code(IDP.validClaims("ann@acme.com").build());
+      calls.add(() -> login.login(c, VERIFIER, REDIRECT).user().id());
     }
-
-    @BeforeEach
-    void reset() {
-        jdbc.update("delete from app_user");
-        jdbc.update("delete from app_setting");
-        IDP.seedSettings(jdbc, cipher, "acme.com", null);
+    ExecutorService pool = Executors.newFixedThreadPool(8);
+    try {
+      Set<UUID> ids = new HashSet<>();
+      for (Future<UUID> f : pool.invokeAll(calls)) {
+        ids.add(f.get()); // a 500 (duplicate key) would surface here
+      }
+      assertThat(ids).hasSize(1);
+      assertThat(userCount()).isEqualTo(1);
+    } finally {
+      pool.shutdownNow();
     }
+  }
 
-    private String code(JWTClaimsSet claims) {
-        return IDP.codeFor(IDP.sign(claims));
-    }
+  @Test
+  void rejectsBadIssuerSignatureOrAudience() throws Exception {
+    setup.markComplete();
+    Instant now = Instant.now();
 
-    private int userCount() {
-        return jdbc.queryForObject("select count(*) from app_user", Integer.class);
-    }
+    String otherKeySigned =
+        FakeIdp.signWith(FakeIdp.rsaKey(), IDP.validClaims("ann@acme.com").build());
+    assertStatus(
+        HttpStatus.UNAUTHORIZED,
+        () -> login.login(IDP.codeFor(otherKeySigned), VERIFIER, REDIRECT));
 
-    private static void assertStatus(HttpStatus expected, ThrowingCallable call) {
-        assertThatThrownBy(call)
-                .isInstanceOfSatisfying(ResponseStatusException.class, e -> assertThat(e.getStatusCode())
-                        .isEqualTo(expected));
-    }
+    assertStatus(
+        HttpStatus.UNAUTHORIZED,
+        () ->
+            login.login(
+                code(IDP.validClaims("ann@acme.com").issuer("https://evil.example").build()),
+                VERIFIER,
+                REDIRECT));
 
-    @Test
-    void createsUserOnFirstLogin() {
-        setup.markComplete();
+    assertStatus(
+        HttpStatus.UNAUTHORIZED,
+        () ->
+            login.login(
+                code(IDP.validClaims("ann@acme.com").audience("someone-else").build()),
+                VERIFIER,
+                REDIRECT));
 
-        OidcLoginService.LoginResult result =
-                login.login(code(IDP.validClaims("Ann@Acme.com").build()), VERIFIER, REDIRECT);
+    assertStatus(
+        HttpStatus.UNAUTHORIZED,
+        () ->
+            login.login(
+                code(
+                    IDP.validClaims("ann@acme.com")
+                        .issueTime(Date.from(now.minusSeconds(1200)))
+                        .expirationTime(Date.from(now.minusSeconds(600)))
+                        .build()),
+                VERIFIER,
+                REDIRECT));
 
-        AppUser user = result.user();
-        assertThat(user.email()).isEqualTo("ann@acme.com");
-        assertThat(user.displayName()).isEqualTo("Test User");
-        assertThat(user.role()).isEqualTo(AppUser.Role.USER);
-        assertThat(userCount()).isEqualTo(1);
-        assertThat(tokens.verifyAccess(result.tokens().access()).id()).isEqualTo(user.id());
-        assertThat(result.tokens().refresh()).isNotBlank();
+    String algNone = FakeIdp.unsigned(IDP.validClaims("ann@acme.com").build());
+    assertStatus(
+        HttpStatus.UNAUTHORIZED, () -> login.login(IDP.codeFor(algNone), VERIFIER, REDIRECT));
 
-        assertThat(IDP.lastTokenRequest())
-                .containsEntry("grant_type", "authorization_code")
-                .containsEntry("code_verifier", VERIFIER)
-                .containsEntry("redirect_uri", REDIRECT)
-                .containsEntry("client_id", FakeIdp.CLIENT_ID)
-                .containsEntry("client_secret", FakeIdp.CLIENT_SECRET);
+    assertStatus(HttpStatus.UNAUTHORIZED, () -> login.login("unknown-code", VERIFIER, REDIRECT));
 
-        AppUser again = login.login(code(IDP.validClaims("ann@acme.com").build()), VERIFIER, REDIRECT)
-                .user();
-        assertThat(again.id()).isEqualTo(user.id());
-        assertThat(userCount()).isEqualTo(1);
-    }
+    // Valid token, but the domain policy says no.
+    assertStatus(
+        HttpStatus.FORBIDDEN,
+        () -> login.login(code(IDP.validClaims("ann@evil.com").build()), VERIFIER, REDIRECT));
+    assertStatus(
+        HttpStatus.FORBIDDEN,
+        () ->
+            login.login(
+                code(IDP.validClaims("ann@acme.com").claim("email_verified", false).build()),
+                VERIFIER,
+                REDIRECT));
+    assertStatus(
+        HttpStatus.FORBIDDEN,
+        () ->
+            login.login(
+                code(IDP.validClaims("ann@acme.com").claim("email_verified", null).build()),
+                VERIFIER,
+                REDIRECT));
 
-    @Test
-    void existingAdminKeepsRole() {
-        setup.markComplete();
-        jdbc.update("insert into app_user(id, email, role) values (?, 'boss@acme.com', 'ADMIN')", UUID.randomUUID());
+    assertThat(userCount()).isZero();
+  }
 
-        AppUser user = login.login(code(IDP.validClaims("boss@acme.com").build()), VERIFIER, REDIRECT)
-                .user();
+  @Test
+  void pinnedTenantAcceptsMissingEmailVerifiedOnlyForMatchingTid() {
+    setup.markComplete();
+    FakeIdp.put(jdbc, "auth.tenantId", TENANT);
 
-        assertThat(user.role()).isEqualTo(AppUser.Role.ADMIN);
-    }
+    assertStatus(
+        HttpStatus.FORBIDDEN,
+        () ->
+            login.login(
+                code(
+                    IDP.validClaims("ann@acme.com")
+                        .claim("email_verified", null)
+                        .claim("tid", "11111111-2222-3333-4444-555555555555")
+                        .build()),
+                VERIFIER,
+                REDIRECT));
+    assertStatus(
+        HttpStatus.FORBIDDEN,
+        () ->
+            login.login(
+                code(
+                    IDP.validClaims("ann@acme.com")
+                        .claim("email_verified", false)
+                        .claim("tid", TENANT)
+                        .build()),
+                VERIFIER,
+                REDIRECT));
+    assertThat(userCount()).isZero();
 
-    @Test
-    void sameEmailWithDifferentSubjectIsRejected() {
-        setup.markComplete();
-        AppUser ann = login.login(code(IDP.validClaims("ann@acme.com").build()), VERIFIER, REDIRECT)
-                .user();
+    AppUser user =
+        login
+            .login(
+                code(
+                    IDP.validClaims("ann@acme.com")
+                        .claim("email_verified", null)
+                        .claim("tid", TENANT)
+                        .build()),
+                VERIFIER,
+                REDIRECT)
+            .user();
+    assertThat(user.email()).isEqualTo("ann@acme.com");
+  }
 
-        // Recycled or edited address: same email, different IdP subject.
-        assertStatus(
-                HttpStatus.FORBIDDEN,
-                () -> login.login(
-                        code(IDP.validClaims("Ann@acme.com")
-                                .subject("someone-else")
-                                .build()),
-                        VERIFIER,
-                        REDIRECT));
+  @Test
+  void firstAdminNeedsValidSetupToken(CapturedOutput out) {
+    setup.reissueToken();
+    Matcher m = Pattern.compile("SETUP TOKEN: (\\S+)").matcher(out.getAll());
+    String raw = m.results().reduce((a, b) -> b).orElseThrow().group(1);
 
-        assertThat(userCount()).isEqualTo(1);
-        assertThat(login.login(code(IDP.validClaims("ann@acme.com").build()), VERIFIER, REDIRECT)
-                        .user()
-                        .id())
-                .isEqualTo(ann.id());
-    }
+    // Setup incomplete: an ordinary login is refused.
+    assertStatus(
+        HttpStatus.CONFLICT,
+        () -> login.login(code(IDP.validClaims("ann@acme.com").build()), VERIFIER, REDIRECT));
+    assertStatus(
+        HttpStatus.FORBIDDEN,
+        () ->
+            login.loginAsFirstAdmin(
+                code(IDP.validClaims("ann@acme.com").build()), VERIFIER, REDIRECT, raw + "x"));
+    assertThat(userCount()).isZero();
 
-    @Test
-    void sameSubjectWithChangedEmailKeepsAccount() {
-        setup.markComplete();
-        AppUser first = login.login(code(IDP.validClaims("ann@acme.com").build()), VERIFIER, REDIRECT)
-                .user();
+    AppUser admin =
+        login
+            .loginAsFirstAdmin(
+                code(IDP.validClaims("ann@acme.com").build()), VERIFIER, REDIRECT, raw)
+            .user();
+    assertThat(admin.role()).isEqualTo(AppUser.Role.ADMIN);
 
-        AppUser again = login.login(
-                        code(IDP.validClaims("ann.new@acme.com")
-                                .subject("sub-ann@acme.com")
-                                .build()),
-                        VERIFIER,
-                        REDIRECT)
-                .user();
+    // Only one first admin, even with the same still-valid token.
+    assertStatus(
+        HttpStatus.FORBIDDEN,
+        () ->
+            login.loginAsFirstAdmin(
+                code(IDP.validClaims("bob@acme.com").build()), VERIFIER, REDIRECT, raw));
+    assertThat(userCount()).isEqualTo(1);
 
-        assertThat(again.id()).isEqualTo(first.id());
-        assertThat(userCount()).isEqualTo(1);
-    }
-
-    @Test
-    void legacyRowWithoutSubjectIsBoundOnce() {
-        setup.markComplete();
-        UUID legacyId = UUID.randomUUID();
-        jdbc.update("insert into app_user(id, email, role) values (?, 'boss@acme.com', 'ADMIN')", legacyId);
-
-        AppUser user = login.login(code(IDP.validClaims("boss@acme.com").build()), VERIFIER, REDIRECT)
-                .user();
-
-        assertThat(user.id()).isEqualTo(legacyId);
-        assertThat(jdbc.queryForMap("select oidc_issuer, oidc_subject from app_user where id = ?", legacyId))
-                .containsEntry("oidc_issuer", IDP.issuer())
-                .containsEntry("oidc_subject", "sub-boss@acme.com");
-        assertStatus(
-                HttpStatus.FORBIDDEN,
-                () -> login.login(
-                        code(IDP.validClaims("boss@acme.com")
-                                .subject("other-sub")
-                                .build()),
-                        VERIFIER,
-                        REDIRECT));
-    }
-
-    @Test
-    void concurrentFirstLoginsCreateOneUser() throws Exception {
-        setup.markComplete();
-        List<Callable<UUID>> calls = new ArrayList<>();
-        for (int i = 0; i < 8; i++) {
-            String c = code(IDP.validClaims("ann@acme.com").build());
-            calls.add(() -> login.login(c, VERIFIER, REDIRECT).user().id());
-        }
-        ExecutorService pool = Executors.newFixedThreadPool(8);
-        try {
-            Set<UUID> ids = new HashSet<>();
-            for (Future<UUID> f : pool.invokeAll(calls)) {
-                ids.add(f.get()); // a 500 (duplicate key) would surface here
-            }
-            assertThat(ids).hasSize(1);
-            assertThat(userCount()).isEqualTo(1);
-        } finally {
-            pool.shutdownNow();
-        }
-    }
-
-    @Test
-    void rejectsBadIssuerSignatureOrAudience() throws Exception {
-        setup.markComplete();
-        Instant now = Instant.now();
-
-        String otherKeySigned = FakeIdp.signWith(
-                FakeIdp.rsaKey(), IDP.validClaims("ann@acme.com").build());
-        assertStatus(HttpStatus.UNAUTHORIZED, () -> login.login(IDP.codeFor(otherKeySigned), VERIFIER, REDIRECT));
-
-        assertStatus(
-                HttpStatus.UNAUTHORIZED,
-                () -> login.login(
-                        code(IDP.validClaims("ann@acme.com")
-                                .issuer("https://evil.example")
-                                .build()),
-                        VERIFIER,
-                        REDIRECT));
-
-        assertStatus(
-                HttpStatus.UNAUTHORIZED,
-                () -> login.login(
-                        code(IDP.validClaims("ann@acme.com")
-                                .audience("someone-else")
-                                .build()),
-                        VERIFIER,
-                        REDIRECT));
-
-        assertStatus(
-                HttpStatus.UNAUTHORIZED,
-                () -> login.login(
-                        code(IDP.validClaims("ann@acme.com")
-                                .issueTime(Date.from(now.minusSeconds(1200)))
-                                .expirationTime(Date.from(now.minusSeconds(600)))
-                                .build()),
-                        VERIFIER,
-                        REDIRECT));
-
-        String algNone = FakeIdp.unsigned(IDP.validClaims("ann@acme.com").build());
-        assertStatus(HttpStatus.UNAUTHORIZED, () -> login.login(IDP.codeFor(algNone), VERIFIER, REDIRECT));
-
-        assertStatus(HttpStatus.UNAUTHORIZED, () -> login.login("unknown-code", VERIFIER, REDIRECT));
-
-        // Valid token, but the domain policy says no.
-        assertStatus(
-                HttpStatus.FORBIDDEN,
-                () -> login.login(code(IDP.validClaims("ann@evil.com").build()), VERIFIER, REDIRECT));
-        assertStatus(
-                HttpStatus.FORBIDDEN,
-                () -> login.login(
-                        code(IDP.validClaims("ann@acme.com")
-                                .claim("email_verified", false)
-                                .build()),
-                        VERIFIER,
-                        REDIRECT));
-        assertStatus(
-                HttpStatus.FORBIDDEN,
-                () -> login.login(
-                        code(IDP.validClaims("ann@acme.com")
-                                .claim("email_verified", null)
-                                .build()),
-                        VERIFIER,
-                        REDIRECT));
-
-        assertThat(userCount()).isZero();
-    }
-
-    @Test
-    void pinnedTenantAcceptsMissingEmailVerifiedOnlyForMatchingTid() {
-        setup.markComplete();
-        FakeIdp.put(jdbc, "auth.tenantId", TENANT);
-
-        assertStatus(
-                HttpStatus.FORBIDDEN,
-                () -> login.login(
-                        code(IDP.validClaims("ann@acme.com")
-                                .claim("email_verified", null)
-                                .claim("tid", "11111111-2222-3333-4444-555555555555")
-                                .build()),
-                        VERIFIER,
-                        REDIRECT));
-        assertStatus(
-                HttpStatus.FORBIDDEN,
-                () -> login.login(
-                        code(IDP.validClaims("ann@acme.com")
-                                .claim("email_verified", false)
-                                .claim("tid", TENANT)
-                                .build()),
-                        VERIFIER,
-                        REDIRECT));
-        assertThat(userCount()).isZero();
-
-        AppUser user = login.login(
-                        code(IDP.validClaims("ann@acme.com")
-                                .claim("email_verified", null)
-                                .claim("tid", TENANT)
-                                .build()),
-                        VERIFIER,
-                        REDIRECT)
-                .user();
-        assertThat(user.email()).isEqualTo("ann@acme.com");
-    }
-
-    @Test
-    void firstAdminNeedsValidSetupToken(CapturedOutput out) {
-        setup.reissueToken();
-        Matcher m = Pattern.compile("SETUP TOKEN: (\\S+)").matcher(out.getAll());
-        String raw = m.results().reduce((a, b) -> b).orElseThrow().group(1);
-
-        // Setup incomplete: an ordinary login is refused.
-        assertStatus(
-                HttpStatus.CONFLICT,
-                () -> login.login(code(IDP.validClaims("ann@acme.com").build()), VERIFIER, REDIRECT));
-        assertStatus(
-                HttpStatus.FORBIDDEN,
-                () -> login.loginAsFirstAdmin(
-                        code(IDP.validClaims("ann@acme.com").build()), VERIFIER, REDIRECT, raw + "x"));
-        assertThat(userCount()).isZero();
-
-        AppUser admin = login.loginAsFirstAdmin(
-                        code(IDP.validClaims("ann@acme.com").build()), VERIFIER, REDIRECT, raw)
-                .user();
-        assertThat(admin.role()).isEqualTo(AppUser.Role.ADMIN);
-
-        // Only one first admin, even with the same still-valid token.
-        assertStatus(
-                HttpStatus.FORBIDDEN,
-                () -> login.loginAsFirstAdmin(
-                        code(IDP.validClaims("bob@acme.com").build()), VERIFIER, REDIRECT, raw));
-        assertThat(userCount()).isEqualTo(1);
-
-        setup.markComplete();
-        assertStatus(
-                HttpStatus.FORBIDDEN,
-                () -> login.loginAsFirstAdmin(
-                        code(IDP.validClaims("ann@acme.com").build()), VERIFIER, REDIRECT, raw));
-    }
+    setup.markComplete();
+    assertStatus(
+        HttpStatus.FORBIDDEN,
+        () ->
+            login.loginAsFirstAdmin(
+                code(IDP.validClaims("ann@acme.com").build()), VERIFIER, REDIRECT, raw));
+  }
 }

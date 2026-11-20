@@ -31,98 +31,99 @@ import se.tcmt.muninn.support.AbstractPostgresIT;
 @ExtendWith(OutputCaptureExtension.class)
 class SetupServiceIT extends AbstractPostgresIT {
 
-    private static final Pattern TOKEN_LINE = Pattern.compile("SETUP TOKEN: (\\S+)");
+  private static final Pattern TOKEN_LINE = Pattern.compile("SETUP TOKEN: (\\S+)");
 
-    @Autowired
-    SetupService setup;
+  @Autowired SetupService setup;
 
-    @Autowired
-    JdbcTemplate jdbc;
+  @Autowired JdbcTemplate jdbc;
 
-    @Autowired
-    MockMvc mvc;
+  @Autowired MockMvc mvc;
 
-    @BeforeEach
-    void reset() {
-        jdbc.update("delete from app_setting");
-    }
+  @BeforeEach
+  void reset() {
+    jdbc.update("delete from app_setting");
+  }
 
-    private static List<String> loggedTokens(CapturedOutput out) {
-        Matcher m = TOKEN_LINE.matcher(out.getAll());
-        return m.results().map(r -> r.group(1)).toList();
-    }
+  private static List<String> loggedTokens(CapturedOutput out) {
+    Matcher m = TOKEN_LINE.matcher(out.getAll());
+    return m.results().map(r -> r.group(1)).toList();
+  }
 
-    private String issueAndCapture(CapturedOutput out) {
-        int before = loggedTokens(out).size();
-        setup.issueTokenIfNeeded();
-        List<String> tokens = loggedTokens(out);
-        assertThat(tokens).hasSize(before + 1);
-        return tokens.get(before);
-    }
+  private String issueAndCapture(CapturedOutput out) {
+    int before = loggedTokens(out).size();
+    setup.issueTokenIfNeeded();
+    List<String> tokens = loggedTokens(out);
+    assertThat(tokens).hasSize(before + 1);
+    return tokens.get(before);
+  }
 
-    @Test
-    void issuesTokenOnceAndStoresHash(CapturedOutput out) throws Exception {
-        int before = loggedTokens(out).size();
-        setup.issueTokenIfNeeded();
-        setup.issueTokenIfNeeded();
+  @Test
+  void issuesTokenOnceAndStoresHash(CapturedOutput out) throws Exception {
+    int before = loggedTokens(out).size();
+    setup.issueTokenIfNeeded();
+    setup.issueTokenIfNeeded();
 
-        List<String> tokens = loggedTokens(out);
-        assertThat(tokens).hasSize(before + 1);
-        String raw = tokens.get(before);
-        assertThat(raw).matches("[A-Za-z0-9_-]{43}");
+    List<String> tokens = loggedTokens(out);
+    assertThat(tokens).hasSize(before + 1);
+    String raw = tokens.get(before);
+    assertThat(raw).matches("[A-Za-z0-9_-]{43}");
 
-        String expectedHash = HexFormat.of()
-                .formatHex(MessageDigest.getInstance("SHA-256").digest(raw.getBytes(StandardCharsets.UTF_8)));
-        List<String> values = jdbc.queryForList("select value from app_setting", String.class);
-        assertThat(values).contains(expectedHash);
-        assertThat(values).doesNotContain(raw);
-        assertThat(setup.isComplete()).isFalse();
-    }
+    String expectedHash =
+        HexFormat.of()
+            .formatHex(
+                MessageDigest.getInstance("SHA-256").digest(raw.getBytes(StandardCharsets.UTF_8)));
+    List<String> values = jdbc.queryForList("select value from app_setting", String.class);
+    assertThat(values).contains(expectedHash);
+    assertThat(values).doesNotContain(raw);
+    assertThat(setup.isComplete()).isFalse();
+  }
 
-    @Test
-    void verifyAcceptsRawRejectsWrong(CapturedOutput out) {
-        String raw = issueAndCapture(out);
+  @Test
+  void verifyAcceptsRawRejectsWrong(CapturedOutput out) {
+    String raw = issueAndCapture(out);
 
-        assertThat(setup.verifyToken(raw)).isTrue();
-        assertThat(setup.verifyToken(raw + "x")).isFalse();
-        assertThat(setup.verifyToken("")).isFalse();
-        assertThat(setup.verifyToken(null)).isFalse();
-    }
+    assertThat(setup.verifyToken(raw)).isTrue();
+    assertThat(setup.verifyToken(raw + "x")).isFalse();
+    assertThat(setup.verifyToken("")).isFalse();
+    assertThat(setup.verifyToken(null)).isFalse();
+  }
 
-    @Test
-    void afterCompleteStatusIsTrueAndTokenRejected(CapturedOutput out) {
-        String raw = issueAndCapture(out);
-        assertThat(setup.verifyToken(raw)).isTrue();
+  @Test
+  void afterCompleteStatusIsTrueAndTokenRejected(CapturedOutput out) {
+    String raw = issueAndCapture(out);
+    assertThat(setup.verifyToken(raw)).isTrue();
 
-        int before = loggedTokens(out).size();
-        setup.markComplete();
+    int before = loggedTokens(out).size();
+    setup.markComplete();
 
-        assertThat(setup.isComplete()).isTrue();
-        assertThat(setup.verifyToken(raw)).isFalse();
-        setup.issueTokenIfNeeded();
-        assertThat(loggedTokens(out)).hasSize(before);
-    }
+    assertThat(setup.isComplete()).isTrue();
+    assertThat(setup.verifyToken(raw)).isFalse();
+    setup.issueTokenIfNeeded();
+    assertThat(loggedTokens(out)).hasSize(before);
+  }
 
-    @Test
-    void setupEndpointsReturn404WhenComplete(CapturedOutput out) throws Exception {
-        String raw = issueAndCapture(out);
+  @Test
+  void setupEndpointsReturn404WhenComplete(CapturedOutput out) throws Exception {
+    String raw = issueAndCapture(out);
 
-        mvc.perform(get("/api/setup/status"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.complete").value(false));
-        mvc.perform(post("/api/setup/verify")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"token\":\"" + raw + "\"}"))
-                .andExpect(status().isOk());
+    mvc.perform(get("/api/setup/status"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.complete").value(false));
+    mvc.perform(
+            post("/api/setup/verify")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"token\":\"" + raw + "\"}"))
+        .andExpect(status().isOk());
 
-        setup.markComplete();
+    setup.markComplete();
 
-        mvc.perform(get("/api/setup/status"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.complete").value(true));
-        mvc.perform(post("/api/setup/verify")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"token\":\"" + raw + "\"}"))
-                .andExpect(status().isNotFound());
-    }
+    mvc.perform(get("/api/setup/status"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.complete").value(true));
+    mvc.perform(
+            post("/api/setup/verify")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"token\":\"" + raw + "\"}"))
+        .andExpect(status().isNotFound());
+  }
 }

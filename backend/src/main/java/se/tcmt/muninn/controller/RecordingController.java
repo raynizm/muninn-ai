@@ -38,182 +38,200 @@ import se.tcmt.muninn.service.RecordingService.UploadResult;
 import tools.jackson.databind.JsonNode;
 
 /**
- * The signed-in user's recordings. Everything is scoped to the caller: another user's id answers 404 for
- * GET, audio and DELETE, for admins too. PUT is different because recording ids are a global primary key
- * chosen by the client: an id already owned by someone else answers 409 with the same body as "same id,
- * different bytes", so the response never reveals that the id belongs to another user.
+ * The signed-in user's recordings. Everything is scoped to the caller: another user's id answers
+ * 404 for GET, audio and DELETE, for admins too. PUT is different because recording ids are a
+ * global primary key chosen by the client: an id already owned by someone else answers 409 with the
+ * same body as "same id, different bytes", so the response never reveals that the id belongs to
+ * another user.
  */
 @RestController
 @RequestMapping("/api/recordings")
 @RequiredArgsConstructor
 public class RecordingController {
 
-    private final RecordingService service;
-    private final AudioStore audio;
+  private final RecordingService service;
+  private final AudioStore audio;
 
-    public record RecordingView(
-            UUID id,
-            String title,
-            Instant createdAt,
-            Instant updatedAt,
-            Long durationMs,
-            String mime,
-            Long sizeBytes,
-            String uploadStatus,
-            ProcessingStatus processingStatus,
-            String lastError) {}
+  public record RecordingView(
+      UUID id,
+      String title,
+      Instant createdAt,
+      Instant updatedAt,
+      Long durationMs,
+      String mime,
+      Long sizeBytes,
+      String uploadStatus,
+      ProcessingStatus processingStatus,
+      String lastError) {}
 
-    public record TranscriptView(String text, JsonNode segments) {}
+  public record TranscriptView(String text, JsonNode segments) {}
 
-    public record SummaryView(String text, JsonNode actionItems) {}
+  public record SummaryView(String text, JsonNode actionItems) {}
 
-    public record RecordingDetailView(
-            UUID id,
-            String title,
-            Instant createdAt,
-            Instant updatedAt,
-            Long durationMs,
-            String mime,
-            Long sizeBytes,
-            String uploadStatus,
-            ProcessingStatus processingStatus,
-            String lastError,
-            TranscriptView transcript,
-            SummaryView summary) {}
+  public record RecordingDetailView(
+      UUID id,
+      String title,
+      Instant createdAt,
+      Instant updatedAt,
+      Long durationMs,
+      String mime,
+      Long sizeBytes,
+      String uploadStatus,
+      ProcessingStatus processingStatus,
+      String lastError,
+      TranscriptView transcript,
+      SummaryView summary) {}
 
-    /**
-     * Raw audio body. 201 on first upload, 200 for an identical repeat; see {@link RecordingService#upload} for
-     * the error statuses. The body is streamed to disk, never buffered in memory.
-     */
-    @PutMapping("/{id}")
-    public ResponseEntity<RecordingView> upload(
-            @AuthenticationPrincipal AppUser user,
-            @PathVariable UUID id,
-            @RequestHeader(value = HttpHeaders.CONTENT_TYPE, required = false) String contentType,
-            @RequestHeader(value = "X-Content-SHA256", required = false) String sha256,
-            @RequestHeader(value = "X-Recording-Created-At", required = false) String createdAt,
-            @RequestHeader(value = "X-Recording-Duration-Ms", required = false) String durationMs,
-            @RequestHeader(value = "X-Recording-Title", required = false) String title,
-            HttpServletRequest request)
-            throws IOException {
-        RecordingService.normalizeMime(contentType); // 415 before anything else
-        long length = request.getContentLengthLong();
-        if (length > service.maxUploadBytes()) {
-            throw new ResponseStatusException(
-                    HttpStatus.CONTENT_TOO_LARGE, "audio exceeds " + service.maxUploadBytes() + " bytes");
-        }
-        if (length == 0) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "empty body");
-        }
-        try (InputStream body = request.getInputStream()) {
-            UploadResult r = service.upload(
-                    user.id(),
-                    id,
-                    body,
-                    sha256,
-                    contentType,
-                    parseInstant(createdAt),
-                    parseDuration(durationMs),
-                    title);
-            return ResponseEntity.status(r.created() ? HttpStatus.CREATED : HttpStatus.OK)
-                    .body(view(r.recording()));
-        }
+  /**
+   * Raw audio body. 201 on first upload, 200 for an identical repeat; see {@link
+   * RecordingService#upload} for the error statuses. The body is streamed to disk, never buffered
+   * in memory.
+   */
+  @PutMapping("/{id}")
+  public ResponseEntity<RecordingView> upload(
+      @AuthenticationPrincipal AppUser user,
+      @PathVariable UUID id,
+      @RequestHeader(value = HttpHeaders.CONTENT_TYPE, required = false) String contentType,
+      @RequestHeader(value = "X-Content-SHA256", required = false) String sha256,
+      @RequestHeader(value = "X-Recording-Created-At", required = false) String createdAt,
+      @RequestHeader(value = "X-Recording-Duration-Ms", required = false) String durationMs,
+      @RequestHeader(value = "X-Recording-Title", required = false) String title,
+      HttpServletRequest request)
+      throws IOException {
+    RecordingService.normalizeMime(contentType); // 415 before anything else
+    long length = request.getContentLengthLong();
+    if (length > service.maxUploadBytes()) {
+      throw new ResponseStatusException(
+          HttpStatus.CONTENT_TOO_LARGE, "audio exceeds " + service.maxUploadBytes() + " bytes");
     }
-
-    @GetMapping
-    public List<RecordingView> list(
-            @AuthenticationPrincipal AppUser user,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant updatedSince) {
-        return service.list(user.id(), updatedSince).stream()
-                .map(RecordingController::view)
-                .toList();
+    if (length == 0) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "empty body");
     }
-
-    @GetMapping("/{id}")
-    public RecordingDetailView get(@AuthenticationPrincipal AppUser user, @PathVariable UUID id) {
-        return service.detail(user.id(), id).map(RecordingController::view).orElseThrow(RecordingController::notFound);
+    try (InputStream body = request.getInputStream()) {
+      UploadResult r =
+          service.upload(
+              user.id(),
+              id,
+              body,
+              sha256,
+              contentType,
+              parseInstant(createdAt),
+              parseDuration(durationMs),
+              title);
+      return ResponseEntity.status(r.created() ? HttpStatus.CREATED : HttpStatus.OK)
+          .body(view(r.recording()));
     }
+  }
 
-    /** Streams the stored file; Spring serves {@code Range} requests (206) for a {@link Resource} body. */
-    @GetMapping("/{id}/audio")
-    public ResponseEntity<Resource> audio(@AuthenticationPrincipal AppUser user, @PathVariable UUID id) {
-        Recording r = service.get(user.id(), id).orElseThrow(RecordingController::notFound);
-        Path file = audio.path(user.id(), id);
-        if (!Files.isRegularFile(file)) {
-            throw notFound();
-        }
-        return ResponseEntity.ok()
-                .contentType(MediaType.parseMediaType(r.mime()))
-                .body(new FileSystemResource(file));
-    }
+  /** Lists the caller's recordings, optionally only those updated since the given instant. */
+  @GetMapping
+  public List<RecordingView> list(
+      @AuthenticationPrincipal AppUser user,
+      @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
+          Instant updatedSince) {
+    return service.list(user.id(), updatedSince).stream().map(RecordingController::view).toList();
+  }
 
-    @DeleteMapping("/{id}")
-    @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void delete(@AuthenticationPrincipal AppUser user, @PathVariable UUID id) {
-        if (!service.delete(user.id(), id)) {
-            throw notFound();
-        }
-    }
+  /** Returns a recording with its transcript and summary; 404 when not owned. */
+  @GetMapping("/{id}")
+  public RecordingDetailView get(@AuthenticationPrincipal AppUser user, @PathVariable UUID id) {
+    return service
+        .detail(user.id(), id)
+        .map(RecordingController::view)
+        .orElseThrow(RecordingController::notFound);
+  }
 
-    private static ResponseStatusException notFound() {
-        return new ResponseStatusException(HttpStatus.NOT_FOUND);
+  /**
+   * Streams the stored file; Spring serves {@code Range} requests (206) for a {@link Resource}
+   * body.
+   */
+  @GetMapping("/{id}/audio")
+  public ResponseEntity<Resource> audio(
+      @AuthenticationPrincipal AppUser user, @PathVariable UUID id) {
+    Recording r = service.get(user.id(), id).orElseThrow(RecordingController::notFound);
+    Path file = audio.path(user.id(), id);
+    if (!Files.isRegularFile(file)) {
+      throw notFound();
     }
+    return ResponseEntity.ok()
+        .contentType(MediaType.parseMediaType(r.mime()))
+        .body(new FileSystemResource(file));
+  }
 
-    private static Instant parseInstant(String value) {
-        if (value == null || value.isBlank()) {
-            return null;
-        }
-        try {
-            return Instant.parse(value.trim());
-        } catch (DateTimeParseException e) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "X-Recording-Created-At must be ISO-8601");
-        }
+  /** Deletes a recording and its audio; 404 when not owned. */
+  @DeleteMapping("/{id}")
+  @ResponseStatus(HttpStatus.NO_CONTENT)
+  public void delete(@AuthenticationPrincipal AppUser user, @PathVariable UUID id) {
+    if (!service.delete(user.id(), id)) {
+      throw notFound();
     }
+  }
 
-    private static Long parseDuration(String value) {
-        if (value == null || value.isBlank()) {
-            return null;
-        }
-        try {
-            return Long.parseLong(value.trim());
-        } catch (NumberFormatException e) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "X-Recording-Duration-Ms must be an integer");
-        }
-    }
+  /** Builds the 404 used for missing or foreign recordings. */
+  private static ResponseStatusException notFound() {
+    return new ResponseStatusException(HttpStatus.NOT_FOUND);
+  }
 
-    static RecordingView view(Recording r) {
-        return new RecordingView(
-                r.id(),
-                r.title(),
-                r.createdAt(),
-                r.updatedAt(),
-                r.durationMs(),
-                r.mime(),
-                r.sizeBytes(),
-                r.uploadStatus(),
-                r.processingStatus(),
-                r.lastError());
+  /** Parses an optional ISO-8601 header value; 400 when malformed. */
+  private static Instant parseInstant(String value) {
+    if (value == null || value.isBlank()) {
+      return null;
     }
+    try {
+      return Instant.parse(value.trim());
+    } catch (DateTimeParseException e) {
+      throw new ResponseStatusException(
+          HttpStatus.BAD_REQUEST, "X-Recording-Created-At must be ISO-8601");
+    }
+  }
 
-    private static RecordingDetailView view(RecordingDetail d) {
-        Recording r = d.recording();
-        return new RecordingDetailView(
-                r.id(),
-                r.title(),
-                r.createdAt(),
-                r.updatedAt(),
-                r.durationMs(),
-                r.mime(),
-                r.sizeBytes(),
-                r.uploadStatus(),
-                r.processingStatus(),
-                r.lastError(),
-                d.transcript() == null
-                        ? null
-                        : new TranscriptView(
-                                d.transcript().text(), d.transcript().segments()),
-                d.summary() == null
-                        ? null
-                        : new SummaryView(d.summary().text(), d.summary().actionItems()));
+  /** Parses an optional duration header in milliseconds; 400 when not an integer. */
+  private static Long parseDuration(String value) {
+    if (value == null || value.isBlank()) {
+      return null;
     }
+    try {
+      return Long.parseLong(value.trim());
+    } catch (NumberFormatException e) {
+      throw new ResponseStatusException(
+          HttpStatus.BAD_REQUEST, "X-Recording-Duration-Ms must be an integer");
+    }
+  }
+
+  /** Maps a recording to its list view. */
+  static RecordingView view(Recording r) {
+    return new RecordingView(
+        r.id(),
+        r.title(),
+        r.createdAt(),
+        r.updatedAt(),
+        r.durationMs(),
+        r.mime(),
+        r.sizeBytes(),
+        r.uploadStatus(),
+        r.processingStatus(),
+        r.lastError());
+  }
+
+  /** Maps a recording detail to its API view including transcript and summary. */
+  private static RecordingDetailView view(RecordingDetail d) {
+    Recording r = d.recording();
+    return new RecordingDetailView(
+        r.id(),
+        r.title(),
+        r.createdAt(),
+        r.updatedAt(),
+        r.durationMs(),
+        r.mime(),
+        r.sizeBytes(),
+        r.uploadStatus(),
+        r.processingStatus(),
+        r.lastError(),
+        d.transcript() == null
+            ? null
+            : new TranscriptView(d.transcript().text(), d.transcript().segments()),
+        d.summary() == null
+            ? null
+            : new SummaryView(d.summary().text(), d.summary().actionItems()));
+  }
 }

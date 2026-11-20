@@ -4,7 +4,9 @@ import java.util.List;
 
 public interface ModelDiscoveryAdapter {
 
-    List<DiscoveredModel> discover(ProviderConnection c);
+  /** Lists the models the provider offers. */
+  List<DiscoveredModel> discover(ProviderConnection c);
 
-    ConnectionTestResult test(ProviderConnection c);
+  /** Checks that the provider is reachable and the key works. */
+  ConnectionTestResult test(ProviderConnection c);
 }

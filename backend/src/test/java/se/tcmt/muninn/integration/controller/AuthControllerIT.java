@@ -29,113 +29,112 @@ import tools.jackson.databind.ObjectMapper;
 @AutoConfigureMockMvc
 class AuthControllerIT extends AbstractPostgresIT {
 
-    private static final FakeIdp IDP = FakeIdp.start();
+  private static final FakeIdp IDP = FakeIdp.start();
 
-    @Autowired
-    MockMvc mvc;
+  @Autowired MockMvc mvc;
 
-    @Autowired
-    SetupService setup;
+  @Autowired SetupService setup;
 
-    @Autowired
-    SecretCipher cipher;
+  @Autowired SecretCipher cipher;
 
-    @Autowired
-    JdbcTemplate jdbc;
+  @Autowired JdbcTemplate jdbc;
 
-    @Autowired
-    ObjectMapper json;
+  @Autowired ObjectMapper json;
 
-    @AfterAll
-    static void stopIdp() {
-        IDP.close();
-    }
+  @AfterAll
+  static void stopIdp() {
+    IDP.close();
+  }
 
-    @BeforeEach
-    void reset() {
-        jdbc.update("delete from app_user");
-        jdbc.update("delete from app_setting");
-        IDP.seedSettings(jdbc, cipher, "acme.com", null);
-        setup.markComplete();
-    }
+  @BeforeEach
+  void reset() {
+    jdbc.update("delete from app_user");
+    jdbc.update("delete from app_setting");
+    IDP.seedSettings(jdbc, cipher, "acme.com", null);
+    setup.markComplete();
+  }
 
-    private JsonNode postJson(String path, Object body, int expectedStatus) throws Exception {
-        String response = mvc.perform(
-                        post(path).contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(body)))
-                .andExpect(status().is(expectedStatus))
-                .andReturn()
-                .getResponse()
-                .getContentAsString();
-        return response.isEmpty() ? null : json.readTree(response);
-    }
+  private JsonNode postJson(String path, Object body, int expectedStatus) throws Exception {
+    String response =
+        mvc.perform(
+                post(path)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(json.writeValueAsString(body)))
+            .andExpect(status().is(expectedStatus))
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+    return response.isEmpty() ? null : json.readTree(response);
+  }
 
-    private JsonNode callback(String email) throws Exception {
-        String code = IDP.codeFor(IDP.sign(IDP.validClaims(email).build()));
-        return postJson(
-                "/api/auth/callback",
-                Map.of("code", code, "codeVerifier", "verifier", "redirectUri", "http://localhost/cb"),
-                200);
-    }
+  private JsonNode callback(String email) throws Exception {
+    String code = IDP.codeFor(IDP.sign(IDP.validClaims(email).build()));
+    return postJson(
+        "/api/auth/callback",
+        Map.of("code", code, "codeVerifier", "verifier", "redirectUri", "http://localhost/cb"),
+        200);
+  }
 
-    @Test
-    void configExposesPublicFieldsOnly() throws Exception {
-        String body = mvc.perform(get("/api/auth/config"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.issuer").value(IDP.issuer()))
-                .andExpect(jsonPath("$.clientId").value(FakeIdp.CLIENT_ID))
-                .andExpect(jsonPath("$.authorizationEndpoint").value(IDP.issuer() + "/authorize"))
-                .andReturn()
-                .getResponse()
-                .getContentAsString();
-        assertThat(body).doesNotContain(FakeIdp.CLIENT_SECRET).doesNotContainIgnoringCase("secret");
-    }
+  @Test
+  void configExposesPublicFieldsOnly() throws Exception {
+    String body =
+        mvc.perform(get("/api/auth/config"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.issuer").value(IDP.issuer()))
+            .andExpect(jsonPath("$.clientId").value(FakeIdp.CLIENT_ID))
+            .andExpect(jsonPath("$.authorizationEndpoint").value(IDP.issuer() + "/authorize"))
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+    assertThat(body).doesNotContain(FakeIdp.CLIENT_SECRET).doesNotContainIgnoringCase("secret");
+  }
 
-    @Test
-    void callbackRefreshLogoutRoundTrip() throws Exception {
-        JsonNode login = callback("ann@acme.com");
-        assertThat(login.at("/user/email").asText()).isEqualTo("ann@acme.com");
-        assertThat(login.at("/user/role").asText()).isEqualTo("USER");
-        String refresh = login.get("refreshToken").asText();
+  @Test
+  void callbackRefreshLogoutRoundTrip() throws Exception {
+    JsonNode login = callback("ann@acme.com");
+    assertThat(login.at("/user/email").asText()).isEqualTo("ann@acme.com");
+    assertThat(login.at("/user/role").asText()).isEqualTo("USER");
+    String refresh = login.get("refreshToken").asText();
 
-        JsonNode rotated = postJson("/api/auth/refresh", Map.of("refreshToken", refresh), 200);
-        String newRefresh = rotated.get("refreshToken").asText();
-        assertThat(rotated.get("accessToken").asText()).isNotBlank();
-        postJson("/api/auth/refresh", Map.of("refreshToken", refresh), 401);
+    JsonNode rotated = postJson("/api/auth/refresh", Map.of("refreshToken", refresh), 200);
+    String newRefresh = rotated.get("refreshToken").asText();
+    assertThat(rotated.get("accessToken").asText()).isNotBlank();
+    postJson("/api/auth/refresh", Map.of("refreshToken", refresh), 401);
 
-        postJson("/api/auth/logout", Map.of("refreshToken", newRefresh), 204);
-        postJson("/api/auth/refresh", Map.of("refreshToken", newRefresh), 401);
-    }
+    postJson("/api/auth/logout", Map.of("refreshToken", newRefresh), 204);
+    postJson("/api/auth/refresh", Map.of("refreshToken", newRefresh), 401);
+  }
 
-    @Test
-    void callbackRejectsDisallowedDomainAndMissingFields() throws Exception {
-        String code = IDP.codeFor(IDP.sign(IDP.validClaims("ann@evil.com").build()));
-        postJson(
-                "/api/auth/callback",
-                Map.of("code", code, "codeVerifier", "v", "redirectUri", "http://localhost/cb"),
-                403);
-        postJson("/api/auth/callback", Map.of("code", "x"), 400);
-    }
+  @Test
+  void callbackRejectsDisallowedDomainAndMissingFields() throws Exception {
+    String code = IDP.codeFor(IDP.sign(IDP.validClaims("ann@evil.com").build()));
+    postJson(
+        "/api/auth/callback",
+        Map.of("code", code, "codeVerifier", "v", "redirectUri", "http://localhost/cb"),
+        403);
+    postJson("/api/auth/callback", Map.of("code", "x"), 400);
+  }
 
-    @Test
-    void apiRequiresValidBearerToken() throws Exception {
-        mvc.perform(get("/api/anything")).andExpect(status().isUnauthorized());
-        mvc.perform(get("/api/anything").header(HttpHeaders.AUTHORIZATION, "Bearer not.a.jwt"))
-                .andExpect(status().isUnauthorized());
-        mvc.perform(get("/api/anything").header(HttpHeaders.AUTHORIZATION, "Basic dXNlcjpwYXNz"))
-                .andExpect(status().isUnauthorized());
+  @Test
+  void apiRequiresValidBearerToken() throws Exception {
+    mvc.perform(get("/api/anything")).andExpect(status().isUnauthorized());
+    mvc.perform(get("/api/anything").header(HttpHeaders.AUTHORIZATION, "Bearer not.a.jwt"))
+        .andExpect(status().isUnauthorized());
+    mvc.perform(get("/api/anything").header(HttpHeaders.AUTHORIZATION, "Basic dXNlcjpwYXNz"))
+        .andExpect(status().isUnauthorized());
 
-        // Only the four listed auth endpoints are public; other /api/auth paths are protected.
-        mvc.perform(get("/api/auth/anything-else")).andExpect(status().isUnauthorized());
-        mvc.perform(get("/api/auth/refresh")).andExpect(status().isUnauthorized());
+    // Only the four listed auth endpoints are public; other /api/auth paths are protected.
+    mvc.perform(get("/api/auth/anything-else")).andExpect(status().isUnauthorized());
+    mvc.perform(get("/api/auth/refresh")).andExpect(status().isUnauthorized());
 
-        String access = callback("ann@acme.com").get("accessToken").asText();
-        // Authenticated: passes security and reaches MVC, which has no such route.
-        mvc.perform(get("/api/anything").header(HttpHeaders.AUTHORIZATION, "Bearer " + access))
-                .andExpect(status().isNotFound());
-    }
+    String access = callback("ann@acme.com").get("accessToken").asText();
+    // Authenticated: passes security and reaches MVC, which has no such route.
+    mvc.perform(get("/api/anything").header(HttpHeaders.AUTHORIZATION, "Bearer " + access))
+        .andExpect(status().isNotFound());
+  }
 
-    @Test
-    void setupStatusStaysPublic() throws Exception {
-        mvc.perform(get("/api/setup/status")).andExpect(status().isOk());
-    }
+  @Test
+  void setupStatusStaysPublic() throws Exception {
+    mvc.perform(get("/api/setup/status")).andExpect(status().isOk());
+  }
 }

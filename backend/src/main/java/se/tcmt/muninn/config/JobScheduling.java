@@ -9,9 +9,9 @@ import org.springframework.scheduling.annotation.Scheduled;
 import se.tcmt.muninn.service.JobWorker;
 
 /**
- * Polls for processing jobs every 2s on Spring's scheduler (one thread by default; fixed delay, so polls never
- * overlap) and drains whatever is due. Off when {@code muninn.worker.enabled=false}, e.g. in tests that call
- * {@link JobWorker#runOnce()} themselves.
+ * Polls for processing jobs every 2s on Spring's scheduler (one thread by default; fixed delay, so
+ * polls never overlap) and drains whatever is due. Off when {@code muninn.worker.enabled=false},
+ * e.g. in tests that call {@link JobWorker#runOnce()} themselves.
  */
 @Configuration(proxyBeanMethods = false)
 @EnableScheduling
@@ -20,16 +20,17 @@ import se.tcmt.muninn.service.JobWorker;
 @RequiredArgsConstructor
 class JobScheduling {
 
-    private final JobWorker worker;
+  private final JobWorker worker;
 
-    @Scheduled(initialDelay = 2000, fixedDelay = 2000)
-    void poll() {
-        try {
-            while (worker.runOnce()) {
-                // keep going while jobs are due
-            }
-        } catch (RuntimeException e) {
-            log.warn("Job poll failed: {}", e.toString());
-        }
+  /** Runs due processing jobs back to back until none are left. */
+  @Scheduled(initialDelay = 2000, fixedDelay = 2000)
+  void poll() {
+    try {
+      while (worker.runOnce()) {
+        // keep going while jobs are due
+      }
+    } catch (RuntimeException e) {
+      log.warn("Job poll failed: {}", e.toString());
     }
+  }
 }

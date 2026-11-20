@@ -6,15 +6,15 @@ import java.util.Random;
 
 public final class TestData {
 
-    private TestData() {}
+  private TestData() {}
 
-    public static byte[] bytes(int n, long seed) {
-        byte[] b = new byte[n];
-        new Random(seed).nextBytes(b);
-        return b;
-    }
+  public static byte[] bytes(int n, long seed) {
+    byte[] b = new byte[n];
+    new Random(seed).nextBytes(b);
+    return b;
+  }
 
-    public static String sha(byte[] b) throws Exception {
-        return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(b));
-    }
+  public static String sha(byte[] b) throws Exception {
+    return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(b));
+  }
 }

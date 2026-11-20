@@ -15,76 +15,96 @@ import se.tcmt.muninn.model.AppUser;
 @RequiredArgsConstructor
 public class UserRepository {
 
-    private static final RowMapper<AppUser> MAPPER = (rs, i) -> new AppUser(
-            rs.getObject("id", UUID.class),
-            rs.getString("email"),
-            rs.getString("display_name"),
-            AppUser.Role.valueOf(rs.getString("role")));
+  private static final RowMapper<AppUser> MAPPER =
+      (rs, i) ->
+          new AppUser(
+              rs.getObject("id", UUID.class),
+              rs.getString("email"),
+              rs.getString("display_name"),
+              AppUser.Role.valueOf(rs.getString("role")));
 
-    private final JdbcTemplate jdbc;
+  private final JdbcTemplate jdbc;
 
-    public Optional<AppUser> findById(UUID id) {
-        return jdbc.query("select * from app_user where id = ?", MAPPER, id).stream()
-                .findFirst();
+  /** Finds a user by id. */
+  public Optional<AppUser> findById(UUID id) {
+    return jdbc.query("select * from app_user where id = ?", MAPPER, id).stream().findFirst();
+  }
+
+  /** Finds a user by email, case-insensitively. */
+  public Optional<AppUser> findByEmail(String email) {
+    return jdbc.query("select * from app_user where email = ?", MAPPER, normalize(email)).stream()
+        .findFirst();
+  }
+
+  /** Finds the user bound to an IdP (issuer, subject) pair. */
+  public Optional<AppUser> findByOidcIdentity(String issuer, String subject) {
+    return jdbc
+        .query(
+            "select * from app_user where oidc_issuer = ? and oidc_subject = ?",
+            MAPPER,
+            issuer,
+            subject)
+        .stream()
+        .findFirst();
+  }
+
+  /**
+   * Inserts unless the email or the (issuer, subject) pair is already taken; returns whether it
+   * inserted.
+   */
+  public boolean insertIfAbsent(
+      String email, String displayName, AppUser.Role role, String issuer, String subject) {
+    return jdbc.update(
+            "insert into app_user(id, email, display_name, role, oidc_issuer, oidc_subject) "
+                + "values (?, ?, ?, ?, ?, ?) on conflict do nothing",
+            UUID.randomUUID(),
+            normalize(email),
+            displayName,
+            role.name(),
+            issuer,
+            subject)
+        == 1;
+  }
+
+  /**
+   * Binds an IdP identity to a legacy row that has none yet; never rebinds an already-bound row.
+   */
+  public boolean bindOidcIdentityIfUnbound(UUID id, String issuer, String subject) {
+    try {
+      return jdbc.update(
+              "update app_user set oidc_issuer = ?, oidc_subject = ? "
+                  + "where id = ? and oidc_subject is null",
+              issuer,
+              subject,
+              id)
+          == 1;
+    } catch (DuplicateKeyException e) {
+      return false; // a concurrent login already bound this identity to a row
     }
+  }
 
-    public Optional<AppUser> findByEmail(String email) {
-        return jdbc.query("select * from app_user where email = ?", MAPPER, normalize(email)).stream()
-                .findFirst();
-    }
+  /** Changes the user's role and returns the updated user. */
+  public AppUser setRole(AppUser user, AppUser.Role role) {
+    jdbc.update("update app_user set role = ? where id = ?", role.name(), user.id());
+    return new AppUser(user.id(), user.email(), user.displayName(), role);
+  }
 
-    public Optional<AppUser> findByOidcIdentity(String issuer, String subject) {
-        return jdbc
-                .query("select * from app_user where oidc_issuer = ? and oidc_subject = ?", MAPPER, issuer, subject)
-                .stream()
-                .findFirst();
-    }
+  /** Whether at least one ADMIN exists. */
+  public boolean adminExists() {
+    return Boolean.TRUE.equals(
+        jdbc.queryForObject(
+            "select exists(select 1 from app_user where role = 'ADMIN')", Boolean.class));
+  }
 
-    /** Inserts unless the email or the (issuer, subject) pair is already taken; returns whether it inserted. */
-    public boolean insertIfAbsent(String email, String displayName, AppUser.Role role, String issuer, String subject) {
-        return jdbc.update(
-                        "insert into app_user(id, email, display_name, role, oidc_issuer, oidc_subject) "
-                                + "values (?, ?, ?, ?, ?, ?) on conflict do nothing",
-                        UUID.randomUUID(),
-                        normalize(email),
-                        displayName,
-                        role.name(),
-                        issuer,
-                        subject)
-                == 1;
-    }
+  /**
+   * Serialises admin bootstrap: blocks concurrent user inserts until the current transaction ends.
+   */
+  public void lockForAdminBootstrap() {
+    jdbc.execute("lock table app_user in share row exclusive mode");
+  }
 
-    /** Binds an IdP identity to a legacy row that has none yet; never rebinds an already-bound row. */
-    public boolean bindOidcIdentityIfUnbound(UUID id, String issuer, String subject) {
-        try {
-            return jdbc.update(
-                            "update app_user set oidc_issuer = ?, oidc_subject = ? "
-                                    + "where id = ? and oidc_subject is null",
-                            issuer,
-                            subject,
-                            id)
-                    == 1;
-        } catch (DuplicateKeyException e) {
-            return false; // a concurrent login already bound this identity to a row
-        }
-    }
-
-    public AppUser setRole(AppUser user, AppUser.Role role) {
-        jdbc.update("update app_user set role = ? where id = ?", role.name(), user.id());
-        return new AppUser(user.id(), user.email(), user.displayName(), role);
-    }
-
-    public boolean adminExists() {
-        return Boolean.TRUE.equals(
-                jdbc.queryForObject("select exists(select 1 from app_user where role = 'ADMIN')", Boolean.class));
-    }
-
-    /** Serialises admin bootstrap: blocks concurrent user inserts until the current transaction ends. */
-    public void lockForAdminBootstrap() {
-        jdbc.execute("lock table app_user in share row exclusive mode");
-    }
-
-    private static String normalize(String email) {
-        return email.toLowerCase(Locale.ROOT);
-    }
+  /** Lower-cases the email for storage and lookup. */
+  private static String normalize(String email) {
+    return email.toLowerCase(Locale.ROOT);
+  }
 }

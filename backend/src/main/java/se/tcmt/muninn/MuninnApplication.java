@@ -8,7 +8,8 @@ import org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoCon
 @SpringBootApplication(exclude = UserDetailsServiceAutoConfiguration.class)
 public class MuninnApplication {
 
-    public static void main(String[] args) {
-        SpringApplication.run(MuninnApplication.class, args);
-    }
+  /** Starts the application. */
+  public static void main(String[] args) {
+    SpringApplication.run(MuninnApplication.class, args);
+  }
 }
