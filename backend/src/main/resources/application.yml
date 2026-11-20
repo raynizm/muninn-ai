@@ -1,0 +1,18 @@
+spring:
+  application:
+    name: muninn
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/muninn}
+    username: ${DB_USER:muninn}
+    password: ${DB_PASSWORD:muninn}
+
+muninn:
+  # Audio lives under {data-dir}/audio/{userId}/{recordingId}.m4a until the user deletes it.
+  data-dir: ${MUNINN_DATA_DIR:./data}
+  # Largest accepted recording upload, enforced while streaming (default 200 MB).
+  max-upload-bytes: ${MUNINN_MAX_UPLOAD_BYTES:209715200}
+  # A RUNNING processing job not finished within this time is assumed abandoned (worker crashed) and is retried.
+  job-timeout: ${MUNINN_JOB_TIMEOUT:30m}
+  worker:
+    # Background job polling (every 2s). Tests turn it off and call JobWorker.runOnce() directly.
+    enabled: ${MUNINN_WORKER_ENABLED:true}
