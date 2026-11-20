@@ -4,7 +4,9 @@ WORKDIR /src
 COPY package.json package-lock.json ./
 COPY packages/api packages/api
 COPY web web
-RUN npm ci && npm run build -w @muninn/web
+# The lockfile covers every workspace, so mobile's manifest must be present even though only web is built.
+COPY mobile/package.json mobile/package.json
+RUN npm ci --workspace @muninn/web --workspace @muninn/api && npm run build -w @muninn/web
 
 FROM eclipse-temurin:21-jdk AS build
 WORKDIR /src/backend

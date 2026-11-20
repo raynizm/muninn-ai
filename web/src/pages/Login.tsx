@@ -48,13 +48,20 @@ export function LoginCallback() {
   const [error, setError] = useState<string | null>(null);
   const started = useRef(false);
 
+  const returningToApp = params.get("state")?.startsWith("app:") ?? false;
+
   useEffect(() => {
     if (started.current) return; // StrictMode runs effects twice; the code is single use
     started.current = true;
+    if (returningToApp) {
+      // Phone sign-in: hand the result to the app, which exchanges the code itself.
+      window.location.replace(`muninn://auth/callback?${params.toString()}`);
+      return;
+    }
     completeLogin(params)
       .then(() => navigate("/", { replace: true }))
       .catch((e: unknown) => setError(e instanceof Error ? e.message : "Sign-in failed"));
-  }, [completeLogin, navigate, params]);
+  }, [completeLogin, navigate, params, returningToApp]);
 
   return (
     <main className="card narrow">
@@ -64,6 +71,8 @@ export function LoginCallback() {
           <p role="alert" className="error">{error}</p>
           <a href="/login">Back to sign-in</a>
         </>
+      ) : returningToApp ? (
+        <p>Returning to the Muninn app…</p>
       ) : (
         <p>Signing you in…</p>
       )}
