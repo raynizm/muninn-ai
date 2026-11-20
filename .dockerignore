@@ -1,0 +1,7 @@
+.git
+.idea
+.superpowers
+docs
+**/target
+**/node_modules
+infrastructure

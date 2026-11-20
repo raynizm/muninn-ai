@@ -1,14 +1,65 @@
+name: muninn
+
 services:
   postgres:
     image: postgres:16-alpine
+    restart: unless-stopped
     environment:
       POSTGRES_DB: muninn
       POSTGRES_USER: muninn
-      POSTGRES_PASSWORD: muninn
-    ports:
-      - "5432:5432"
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-muninn}
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U muninn -d muninn"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  whisper:
+    # faster-whisper behind an OpenAI-compatible API (/v1/audio/transcriptions). CPU image; see whisper/README.md
+    # for GPU and for downloading a model.
+    image: ghcr.io/speaches-ai/speaches:latest-cpu
+    restart: unless-stopped
+    environment:
+      WHISPER__COMPUTE_TYPE: ${WHISPER_COMPUTE_TYPE:-int8}
+    volumes:
+      - whisper-models:/home/ubuntu/.cache/huggingface/hub
+
+  backend:
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/muninn
+      DB_USER: muninn
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-muninn}
+      MUNINN_DATA_DIR: /data
+      MUNINN_MASTER_KEY_FILE: /run/secrets/muninn_master_key
+      MUNINN_MAX_UPLOAD_BYTES: ${MUNINN_MAX_UPLOAD_BYTES:-209715200}
+    secrets:
+      - muninn_master_key
+    volumes:
+      - muninn-data:/data
+    ports:
+      - "${MUNINN_PORT:-8080}:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/api/setup/status >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 30s
+
+secrets:
+  muninn_master_key:
+    # Exactly 32 raw bytes, no trailing newline. Create it with: head -c 32 /dev/urandom > secrets/muninn_master_key
+    file: ./secrets/muninn_master_key
 
 volumes:
   pgdata:
+  muninn-data:
+  whisper-models:

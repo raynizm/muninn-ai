@@ -46,8 +46,9 @@ The long-term goal is a searchable personal memory you can question: *"What did 
 | SSO login (Microsoft, Google) with own session tokens | Done |
 | AI provider registry (OpenAI-compatible), model discovery | Done |
 | Setup wizard and admin settings API | Done |
-| Recording upload and access API | In progress |
-| Transcription and summaries | Planned (milestone 1) |
+| Recording upload and access API | Done |
+| Transcription and summaries | Done |
+| Docker Compose (backend, Postgres, Whisper) | Done |
 | Web app | Planned (milestone 1) |
 | Phone app (iOS and Android) | Planned (milestone 1) |
 | Search and chat over memories, multi-model routing, Gemini and Anthropic | Later milestones |
@@ -74,30 +75,40 @@ You need a Linux server with Docker and Docker Compose, plus an OIDC app registr
 
 ### 1. Create the master key
 
-Provider keys and the SSO client secret are encrypted with a master key. It must be exactly 32 raw bytes, with no trailing newline:
+Provider keys and the SSO client secret are encrypted with a master key. It must be exactly 32 raw bytes, with no trailing newline (so do not create it with `echo`):
 
 ```bash
-head -c 32 /dev/urandom > muninn_master_key
-chmod 600 muninn_master_key
+cd infrastructure
+mkdir -p secrets
+head -c 32 /dev/urandom > secrets/muninn_master_key
+chmod 600 secrets/muninn_master_key
 ```
 
-Back it up. Without it, saved provider keys cannot be decrypted. The backend reads it from the file named by `MUNINN_MASTER_KEY_FILE`, and the compose file mounts it as a Docker secret.
+Back it up. Without it, saved provider keys cannot be decrypted. The compose file mounts it as the Docker secret `muninn_master_key`, and the backend reads it from the path in `MUNINN_MASTER_KEY_FILE`.
 
 ### 2. Start the stack
 
 ```bash
-cd infrastructure
+cp .env.example .env   # set POSTGRES_PASSWORD and, if you like, the port
 docker compose up -d --build
 ```
 
-Recordings are stored under the directory set by `MUNINN_DATA_DIR`. Keep it on a persistent volume and back it up.
+This starts the backend (port 8080), PostgreSQL and a local Whisper server. Recordings are stored in the `muninn-data` volume (`MUNINN_DATA_DIR`). Back that volume up with the database.
+
+Whisper starts with no model. Download one, as described in [infrastructure/whisper/README.md](infrastructure/whisper/README.md):
+
+```bash
+docker compose exec whisper curl -sf -X POST http://localhost:8000/v1/models/Systran/faster-whisper-small
+```
+
+To check the stack, run `sh smoke.sh` from `infrastructure/`.
 
 ### 3. Get the setup token
 
 On first start, the backend prints a one-time setup token to its log:
 
 ```bash
-docker compose logs backend | grep -i setup
+docker compose logs backend | grep "SETUP TOKEN"
 ```
 
 ### 4. Register Muninn with your identity provider
@@ -111,7 +122,7 @@ Open your Muninn address in a browser. The wizard asks for:
 1. The setup token.
 2. The OIDC issuer, client ID and client secret, and the **allowed email domains**, for example `yourcompany.com`. At least one domain is required. Without it, anyone with a Google account could sign in.
 3. You sign in through SSO. You become the first admin.
-4. The AI provider URL and key (for example `http://ollama:11434` for a local Ollama), then the chat and transcription models.
+4. The AI provider URL and key (for example `http://ollama:11434` for a local Ollama, or `http://whisper:8000` for the bundled Whisper), then the chat and transcription models. The bundled Whisper only transcribes, so a chat model needs a second provider.
 5. Finish. Tell your coworkers the address.
 
 ### Recovery

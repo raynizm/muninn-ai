@@ -189,3 +189,7 @@ target/
 
 # Muninn dev audio data (MUNINN_DATA_DIR default ./data)
 /backend/data/
+
+# compose secrets and local env
+infrastructure/secrets/
+infrastructure/.env
