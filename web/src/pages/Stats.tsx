@@ -128,7 +128,12 @@ function MonthChart({ months }: { months: MonthStat[] }) {
 
   return (
     <div className="chart" onMouseLeave={() => setActive(null)}>
-      <div className="chart-tip" aria-live="polite" style={{ visibility: hovered ? "visible" : "hidden", left: active == null ? 0 : `${((PAD.left + slot * (active + 0.5)) / W) * 100}%` }}>
+      <div className="chart-tip" aria-live="polite" style={{
+          visibility: hovered ? "visible" : "hidden",
+          left: active == null ? 0 : `${((PAD.left + slot * (active + 0.5)) / W) * 100}%`,
+          // Centered over the bar in the middle, flush with the chart at either end, so it never overflows.
+          transform: `translateX(-${active == null ? 50 : (active / (months.length - 1)) * 100}%)`,
+        }}>
         {hovered && (
           <>
             <strong>{monthLabel(hovered.month, true)}</strong>

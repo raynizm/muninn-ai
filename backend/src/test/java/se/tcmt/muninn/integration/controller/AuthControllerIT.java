@@ -147,7 +147,8 @@ class AuthControllerIT extends AbstractPostgresIT {
 
   @Test
   void webAppRoutesAreServedWithoutAuthentication() throws Exception {
-    for (String route : new String[] {"/", "/login", "/login/callback", "/setup", "/settings"}) {
+    for (String route :
+        new String[] {"/", "/login", "/reset-password", "/setup", "/settings", "/stats"}) {
       mvc.perform(get(route)).andExpect(status().isOk()).andExpect(forwardedUrl("/index.html"));
     }
     mvc.perform(get("/recordings/6b2f3c52-98b5-4b6e-9d6a-7a1c9a5c2b10"))

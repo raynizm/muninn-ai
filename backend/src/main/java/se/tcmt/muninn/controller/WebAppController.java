@@ -11,7 +11,15 @@ import org.springframework.web.bind.annotation.GetMapping;
 public class WebAppController {
 
   /** Forwards a client-side route to the SPA entry point. */
-  @GetMapping({"/", "/login", "/login/callback", "/setup", "/settings", "/recordings/{id}"})
+  @GetMapping({
+    "/",
+    "/login",
+    "/reset-password",
+    "/setup",
+    "/settings",
+    "/stats",
+    "/recordings/{id}"
+  })
   public String index() {
     return "forward:/index.html";
   }

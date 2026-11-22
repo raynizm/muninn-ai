@@ -1,4 +1,5 @@
 import { screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { Stats as StatsData } from "@muninn/api";
 import { renderPage } from "../test-utils";
@@ -65,5 +66,16 @@ describe("Stats", () => {
     renderPage(<Stats />, { getStats });
     await screen.findAllByText("Recordings");
     expect(getStats).toHaveBeenCalledWith(Intl.DateTimeFormat().resolvedOptions().timeZone);
+  });
+
+  it("keepsTheTooltipInsideTheChartAtTheEdges", async () => {
+    renderPage(<Stats />, { getStats: vi.fn(async () => stats()) });
+    const targets = await screen.findAllByLabelText(/recordings, .* hours/i);
+
+    await userEvent.hover(targets[11]); // newest month, at the right edge
+    expect(screen.getByText("Nov 2026").closest(".chart-tip")).toHaveStyle({ transform: "translateX(-100%)" });
+
+    await userEvent.hover(targets[0]); // oldest month, at the left edge
+    expect(screen.getByText(/Dec 2025/).closest(".chart-tip")).toHaveStyle({ transform: "translateX(-0%)" });
   });
 });

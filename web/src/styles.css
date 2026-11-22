@@ -87,4 +87,4 @@ audio { width: 100%; margin: 0.5rem 0; }
 .chart .bar.active { opacity: 1; }
 .chart .hit { fill: transparent; outline: none; }
 .chart .hit:focus-visible { stroke: var(--chart-1); stroke-width: 2; }
-.chart-tip { position: absolute; top: 0; transform: translateX(-50%); background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 0.25rem 0.6rem; font-size: 0.85rem; display: grid; pointer-events: none; z-index: 1; white-space: nowrap; }
+.chart-tip { position: absolute; top: 0; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 0.25rem 0.6rem; font-size: 0.85rem; display: grid; pointer-events: none; z-index: 1; white-space: nowrap; }
