@@ -4,7 +4,7 @@
 
 `backend/src/test/java/se/tcmt/muninn/integration/E2EIT.java` drives the whole backend over HTTP against a real PostgreSQL (Testcontainers), a fake OpenID provider and a fake OpenAI-compatible server:
 
-setup wizard → first admin → SSO sign-in as a normal user → upload of an m4a → background processing → transcript and summary → another user and the admin get 404.
+setup wizard → first admin → SSO sign-in as a normal user → upload of an m4a → background processing → transcript and summary → another user and the admin get 404. (This test still covers the backend SSO path; the web app now uses the single-owner password flow, covered by `OwnerAccountControllerIT`.)
 
 ```bash
 cd backend
@@ -29,11 +29,12 @@ These need things a test cannot fake. Run them once per release.
 - [ ] Download a Whisper model (see `whisper/README.md`); `GET /v1/models` on the whisper service lists it.
 - [ ] Reverse proxy with HTTPS in front of port 8080; the web app loads over `https://`.
 
-### Sign-in
+### Account
 
-- [ ] **Microsoft Entra**: register a web app with redirect URI `https://<server>/login/callback`, run the wizard with the Entra preset and a tenant ID. Sign in with an account from an allowed domain. An account from another domain is refused.
-- [ ] **Google Workspace**: same with the Google preset. An account whose email is not verified, or from another domain, is refused.
-- [ ] Setup endpoints answer 404 after setup is finished, and the setup token no longer works.
+- [ ] Open the web app on a fresh install: "Welcome to Muninn" asks for the setup token, email and password. A wrong token is refused; a password under 10 characters is refused.
+- [ ] After creating the account you are signed in and `/setup` redirects to the recordings list. A second visit never shows the create-account page.
+- [ ] Sign out and sign in again with the email (any letter case) and password. A wrong password and an unknown email show the same message. Five wrong attempts in a row are refused for a while, even with the right password.
+- [ ] **Forgot password**: restart the backend with `--muninn.reissue-setup-token=true`, read the recovery token from the log, reset the password at `/reset-password`. The old password and the old session stop working; the token cannot be used twice.
 
 ### AI
 
@@ -46,7 +47,7 @@ These need things a test cannot fake. Run them once per release.
 
 Build once with `cd mobile && npx expo run:android` or `npx expo run:ios`.
 
-- [ ] First launch asks for the server address; SSO sign-in in the system browser returns to the app.
+- [ ] First launch asks for the server address. (Sign-in with email and password on the phone is the next change; the old SSO flow no longer applies.)
 - [ ] Record: the microphone prompt appears and the recording indicator is visible while recording.
 - [ ] **Offline**: switch on airplane mode, record, force-close and reopen the app. The recording is still listed as `Queued`.
 - [ ] Switch airplane mode off. The recording uploads without opening anything, and appears on the web list within about 10 seconds.
@@ -56,5 +57,5 @@ Build once with `cd mobile && npx expo run:android` or `npx expo run:ios`.
 
 ### Privacy
 
-- [ ] A second user cannot open the first user's recording by id (404), nor can the admin.
+- [ ] There is no way to create a second account through the web app or the API.
 - [ ] The provider API key never appears in any API response or in the server log.

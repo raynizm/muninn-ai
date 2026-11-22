@@ -2,9 +2,9 @@
 
 **A memory for everything you say. Yours, on your own server.**
 
-Muninn is an open source, self-hosted personal AI memory. Record a meeting, a thought or a voice note on your phone. Muninn transcribes it, summarizes it, pulls out the decisions and action items, and keeps it all in a place only you and your team control. Later, you can ask it what was said.
+Muninn is an open source, self-hosted personal AI memory. Record a meeting, a thought or a voice note on your phone. Muninn transcribes it, summarizes it, pulls out the decisions and action items, and keeps it all in a place only you control. Later, you can ask it what was said.
 
-> **Status:** milestone 1 is feature complete: backend, web app and phone app. The phone app has only been checked with automated tests so far; run the [manual checklist](infrastructure/e2e/README.md) on a real device before relying on it. See [What works today](#what-works-today).
+> **Status:** milestone 1 is feature complete, and Muninn is now a single-user app: one account, email and password, no SSO and no other users. The web app uses it. The phone app still signs in through the old SSO flow and needs an email and password form next. Run the [manual checklist](infrastructure/e2e/README.md) on a real device before relying on it. See [What works today](#what-works-today).
 
 ## Why "Muninn"?
 
@@ -26,13 +26,13 @@ The long-term goal is a searchable personal memory you can question: *"What did 
 ## Features
 
 - **Self-hosted.** One `docker compose up`. Your audio and transcripts stay on your hardware.
-- **Multi-user, SSO only.** Everyone signs in with the work account they already have: Microsoft Entra or Google Workspace (OIDC). There are no passwords to leak. The admin sets which email domains are allowed.
-- **Private by default.** Every user sees only their own recordings. Admins manage users and settings, but cannot read other people's recordings or transcripts.
-- **Bring your own AI.** Use a local model (Ollama, vLLM, llama.cpp, LM Studio) or any OpenAI-compatible service. The admin sets a default for the whole workplace, and users can set their own if the admin allows it.
+- **Just for you.** You create one account (email and password) when you set Muninn up, and nobody else can sign up. There is no organization, no admin and no other users. Muninn never sends email.
+- **Private by default.** Your recordings are only yours. The server runs where you decide, and nothing leaves it except what you send to the AI provider you choose.
+- **Bring your own AI.** Use a local model (Ollama, vLLM, llama.cpp, LM Studio) or any OpenAI-compatible service. Pick your providers and default models in Settings.
 - **Secrets stay on the server.** Provider API keys are encrypted at rest and never sent to the phone or browser.
 - **Works offline.** The phone records and queues uploads without a connection, and resumes when it is back. (Phones limit background work, so uploads are not promised while the app is closed.)
 - **Safe retries.** Uploads are idempotent, so a flaky network can't create duplicate recordings or transcripts.
-- **Setup wizard.** The first run walks the admin through SSO, allowed domains and the AI provider, with a connection test.
+- **Simple first run.** Open the web app, paste the one-time setup token from the server log, and choose your email and password. Forgot the password? A recovery token from the server log lets you set a new one.
 - **You keep your data.** Audio is kept until you delete it. Deleting a recording removes the audio and everything derived from it.
 - **AGPL-3.0.** Free software, and it stays free.
 
@@ -43,14 +43,15 @@ The long-term goal is a searchable personal memory you can question: *"What did 
 | Database schema and migrations | Done |
 | Encrypted secret storage | Done |
 | First-run setup token and recovery | Done |
-| SSO login (Microsoft, Google) with own session tokens | Done |
+| SSO login (Microsoft, Google) in the backend | Done, not used by the web app any more |
 | AI provider registry (OpenAI-compatible), model discovery | Done |
-| Setup wizard and admin settings API | Done |
+| Single owner account: first-run creation, email and password login, password reset | Done |
 | Recording upload and access API | Done |
 | Transcription and summaries | Done |
 | Docker Compose (backend, Postgres, Whisper) | Done |
-| Web app (sign-in, setup wizard, recordings, settings) | Done |
+| Web app (create account, sign-in, recordings, settings) | Done |
 | Phone app (iOS and Android): record, offline queue, upload, list and detail | Done, needs a real-device check |
+| Phone app sign-in with email and password | Next (it still uses the old SSO browser flow) |
 | Search and chat over memories, multi-model routing, Gemini and Anthropic | Later milestones |
 
 ## How it is built
@@ -71,11 +72,11 @@ muninn-ai/
 
 ## Setting it up
 
-You need a Linux server with Docker and Docker Compose, plus an OIDC app registration in Microsoft Entra or Google Cloud, and an AI endpoint (for example Ollama on the same machine). Put the server behind a reverse proxy with HTTPS. Phones and SSO providers expect it.
+You need a machine with Docker and Docker Compose, and an AI endpoint (for example Ollama on the same machine). If it is reachable from the internet, put it behind a reverse proxy with HTTPS.
 
 ### 1. Create the master key
 
-Provider keys and the SSO client secret are encrypted with a master key. It must be exactly 32 raw bytes, with no trailing newline (so do not create it with `echo`):
+Provider keys are encrypted with a master key. It must be exactly 32 raw bytes, with no trailing newline (so do not create it with `echo`):
 
 ```bash
 cd infrastructure
@@ -111,23 +112,27 @@ On first start, the backend prints a one-time setup token to its log:
 docker compose logs backend | grep "SETUP TOKEN"
 ```
 
-### 4. Register Muninn with your identity provider
+### 4. Create your account
 
-Create an OIDC web application in Microsoft Entra or Google Cloud. Set the redirect URI to `https://<your Muninn address>/login/callback` (the web app and the phone app both use it) and note the issuer URL, client ID and client secret.
+Open your Muninn address in a browser. Because nobody has an account yet, you see "Welcome to Muninn":
 
-### 5. Run the setup wizard
+1. Paste the setup token from the log.
+2. Choose your email and password (at least 10 characters). The email is only your login name: Muninn never sends email.
+3. That creates the only account and closes setup for good. Nobody else can sign up or be added.
 
-Open your Muninn address in a browser. The wizard asks for:
+### 5. Add an AI provider
 
-1. The setup token.
-2. The OIDC issuer, client ID and client secret, and the **allowed email domains**, for example `yourcompany.com`. At least one domain is required. Without it, anyone with a Google account could sign in.
-3. You sign in through SSO. You become the first admin.
-4. The AI provider URL and key (for example `http://ollama:11434` for a local Ollama, or `http://whisper:8000` for the bundled Whisper), then the chat and transcription models. The bundled Whisper only transcribes, so a chat model needs a second provider.
-5. Finish. Tell your coworkers the address.
+Open **Settings**. Add a provider, for example `http://ollama:11434` for a local Ollama or `http://whisper:8000` for the bundled Whisper, test the connection, then choose your default summary (chat) and transcription models. The bundled Whisper only transcribes, so a chat model needs a second provider.
 
-### Recovery
+### Forgot your password
 
-If SSO is misconfigured, restart the backend with `--muninn.reissue-setup-token=true`. It prints a new token that can be used once to replace the SSO settings. Recovery works with the **same issuer**. Switching to a different issuer locks existing users out, because accounts are tied to the identity provider's user ID.
+Restart the backend with `--muninn.reissue-setup-token=true`. It prints a one-time recovery token:
+
+```bash
+docker compose logs backend | grep "RECOVERY TOKEN"
+```
+
+Open `/reset-password` in the web app, paste the token and choose a new password. This signs you out everywhere.
 
 ## Development
 
