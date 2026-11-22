@@ -103,6 +103,56 @@ public class UserRepository {
     jdbc.execute("lock table app_user in share row exclusive mode");
   }
 
+  /** The stored BCrypt hash of the user's password, if the account has one. */
+  public Optional<String> passwordHashOf(UUID userId) {
+    return jdbc
+        .query(
+            "select password_hash from app_user where id = ? and password_hash is not null",
+            (rs, i) -> rs.getString(1),
+            userId)
+        .stream()
+        .findFirst();
+  }
+
+  /** Whether the account signs in with a password. */
+  public boolean hasPassword(UUID userId) {
+    return passwordHashOf(userId).isPresent();
+  }
+
+  /** Creates the owner: role ADMIN, signs in with a password, no SSO identity. */
+  public AppUser insertOwner(String email, String displayName, String passwordHash) {
+    UUID id = UUID.randomUUID();
+    jdbc.update(
+        "insert into app_user(id, email, display_name, role, password_hash) values (?, ?, ?, 'ADMIN', ?)",
+        id,
+        normalize(email),
+        displayName,
+        passwordHash);
+    return findById(id).orElseThrow();
+  }
+
+  /** Replaces the user's password hash. */
+  public void setPasswordHash(UUID userId, String passwordHash) {
+    jdbc.update("update app_user set password_hash = ? where id = ?", passwordHash, userId);
+  }
+
+  /** Number of accounts. */
+  public long count() {
+    Long n = jdbc.queryForObject("select count(*) from app_user", Long.class);
+    return n == null ? 0 : n;
+  }
+
+  /** The first (and normally only) account. */
+  public Optional<AppUser> findOwner() {
+    return jdbc.query("select * from app_user order by created_at, id limit 1", MAPPER).stream()
+        .findFirst();
+  }
+
+  /** Revokes every refresh token of the user; returns how many were deleted. */
+  public int deleteRefreshTokens(UUID userId) {
+    return jdbc.update("delete from refresh_token where user_id = ?", userId);
+  }
+
   /** Lower-cases the email for storage and lookup. */
   private static String normalize(String email) {
     return email.toLowerCase(Locale.ROOT);
