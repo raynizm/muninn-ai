@@ -73,6 +73,25 @@ class StatsControllerIT extends AbstractPostgresIT {
   }
 
   @Test
+  void onlyRegionTimeZonesAreAccepted() throws Exception {
+    // Numeric offsets mean different things to Java and Postgres, so they are refused.
+    for (String tz : new String[] {"+05:00", "UTC+05:00", "GMT-3", "EST5EDT-garbage"}) {
+      mvc.perform(
+              get("/api/stats")
+                  .param("tz", tz)
+                  .header(HttpHeaders.AUTHORIZATION, "Bearer " + access))
+          .andExpect(status().isBadRequest());
+    }
+    for (String tz : new String[] {"UTC", "Europe/Stockholm", "America/New_York"}) {
+      mvc.perform(
+              get("/api/stats")
+                  .param("tz", tz)
+                  .header(HttpHeaders.AUTHORIZATION, "Bearer " + access))
+          .andExpect(status().isOk());
+    }
+  }
+
+  @Test
   void needsAToken() throws Exception {
     mvc.perform(get("/api/stats")).andExpect(status().isUnauthorized());
   }

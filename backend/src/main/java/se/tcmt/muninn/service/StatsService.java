@@ -10,8 +10,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 
 /** Simple statistics over one user's recordings. */
 @Service
@@ -52,6 +54,15 @@ public class StatsService {
 
   /** Computes the statistics of the user's recordings, grouping months in the given time zone. */
   public Stats compute(UUID userId, ZoneId zone) {
+    Boolean known =
+        jdbc.queryForObject(
+            "select exists(select 1 from pg_timezone_names where name = ?)",
+            Boolean.class,
+            zone.getId());
+    if (!Boolean.TRUE.equals(known)) {
+      // Java knows this zone but the database does not, so it cannot group by it.
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "unknown time zone");
+    }
     YearMonth current = YearMonth.from(clock.instant().atZone(zone));
     YearMonth oldest = current.minusMonths(MONTHS - 1);
 

@@ -114,6 +114,27 @@ public class UserRepository {
         .findFirst();
   }
 
+  /**
+   * Locks the user's row exclusively until the transaction ends and returns the password hash read
+   * under that lock. Everything that must not interleave with a password change takes this or
+   * {@link #lockShared} first, always before touching refresh tokens.
+   */
+  public Optional<String> lockPasswordHashForUpdate(UUID userId) {
+    return jdbc
+        .query(
+            "select password_hash from app_user where id = ? for update",
+            (rs, i) -> rs.getString(1),
+            userId)
+        .stream()
+        .filter(h -> h != null)
+        .findFirst();
+  }
+
+  /** Locks the user's row for sharing until the transaction ends; waits for a password change. */
+  public void lockShared(UUID userId) {
+    jdbc.query("select 1 from app_user where id = ? for share", (rs, i) -> 1, userId);
+  }
+
   /** Whether any account signs in with a password, i.e. this server has a single owner. */
   public boolean hasPasswordAccount() {
     return Boolean.TRUE.equals(

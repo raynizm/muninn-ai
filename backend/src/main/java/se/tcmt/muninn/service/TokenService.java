@@ -140,6 +140,16 @@ public class TokenService {
       throw unauthorized();
     }
     record Row(UUID userId, Instant expiresAt, Instant sessionStartedAt) {}
+    // Lock the user before consuming the token, so a password change (which locks the user and then
+    // deletes all refresh tokens) cannot slip between this delete and the insert of the new token.
+    jdbc
+        .query(
+            "select user_id from refresh_token where token_hash = ?",
+            (rs, i) -> rs.getObject(1, UUID.class),
+            hash(refreshToken))
+        .stream()
+        .findFirst()
+        .ifPresent(users::lockShared);
     List<Row> rows =
         jdbc.query(
             "delete from refresh_token where token_hash = ? returning user_id, expires_at, session_started_at",

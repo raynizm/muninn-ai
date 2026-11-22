@@ -1,6 +1,5 @@
 package se.tcmt.muninn.controller;
 
-import java.time.DateTimeException;
 import java.time.ZoneId;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -21,16 +20,19 @@ public class StatsController {
 
   private final StatsService stats;
 
-  /** Totals and a per-month series; {@code tz} is an IANA time zone id and defaults to UTC. */
+  /**
+   * Totals and a per-month series; {@code tz} is an IANA region id (for example {@code
+   * Europe/Stockholm}) and defaults to UTC.
+   */
   @GetMapping
   public StatsService.Stats get(
       @AuthenticationPrincipal AppUser user, @RequestParam(defaultValue = "UTC") String tz) {
-    ZoneId zone;
-    try {
-      zone = ZoneId.of(tz);
-    } catch (DateTimeException e) {
+    // Only region ids such as Europe/Stockholm: numeric offsets like +05:00 mean different things
+    // to
+    // Java and to Postgres, so months could be grouped wrongly.
+    if (!ZoneId.getAvailableZoneIds().contains(tz)) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "unknown time zone");
     }
-    return stats.compute(user.id(), zone);
+    return stats.compute(user.id(), ZoneId.of(tz));
   }
 }

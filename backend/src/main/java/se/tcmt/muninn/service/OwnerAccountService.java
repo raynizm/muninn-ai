@@ -26,6 +26,8 @@ public class OwnerAccountService {
   /** The single message for an unknown email and a wrong password. */
   public static final String BAD_CREDENTIALS = "invalid email or password";
 
+  private static final String WRONG_CURRENT_PASSWORD = "wrong current password";
+
   static final int MIN_PASSWORD_CHARS = 10;
 
   /** BCrypt only reads the first 72 bytes, so longer passwords are refused instead of truncated. */
@@ -76,22 +78,29 @@ public class OwnerAccountService {
   /**
    * Signs in with email and password. Attempts are throttled per email only: a per-address limit
    * would lock everyone out behind a reverse proxy, and a single-owner server has only one email
-   * worth guessing.
+   * worth guessing. The password is checked and the tokens are issued under the user's row lock, so
+   * a login cannot finish after a concurrent password change with the old password's session.
    */
   public Session login(String email, String password) {
     String normalized = email == null ? "" : email.trim().toLowerCase(Locale.ROOT);
     String key = "email:" + normalized;
-    if (!throttle.tryAttempt(key)) {
-      throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, "too many attempts");
-    }
-    AppUser user = users.findByEmail(normalized).orElse(null);
-    String hash = user == null ? null : users.passwordHashOf(user.id()).orElse(null);
-    boolean ok = encoder.matches(password == null ? "" : password, hash == null ? dummyHash : hash);
-    if (!ok || user == null || hash == null) {
-      throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, BAD_CREDENTIALS);
-    }
+    throttleOrFail(key);
+    AppUser candidate = users.findByEmail(normalized).orElse(null);
+    Session session =
+        tx.execute(
+            status -> {
+              String hash = null;
+              if (candidate != null) {
+                users.lockShared(candidate.id());
+                hash = users.passwordHashOf(candidate.id()).orElse(null);
+              }
+              if (!passwordMatches(password, hash)) {
+                throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, BAD_CREDENTIALS);
+              }
+              return new Session(tokens.issue(candidate), candidate);
+            });
     throttle.reset(key);
-    return new Session(tokens.issue(user), user);
+    return session;
   }
 
   /**
@@ -113,7 +122,12 @@ public class OwnerAccountService {
   public AppUser changeEmail(UUID userId, String currentPassword, String newEmail) {
     String normalized = validEmail(newEmail);
     AppUser user = requireUser(userId);
-    verifyCurrentPassword(user, currentPassword);
+    String key = "email:" + user.email();
+    throttleOrFail(key);
+    if (!passwordMatches(currentPassword, users.passwordHashOf(userId).orElse(null))) {
+      throw new ResponseStatusException(HttpStatus.FORBIDDEN, WRONG_CURRENT_PASSWORD);
+    }
+    throttle.reset(key);
     try {
       users.updateEmail(userId, normalized);
     } catch (DuplicateKeyException e) {
@@ -124,19 +138,29 @@ public class OwnerAccountService {
 
   /**
    * Changes the password; needs the current one. Every other session is signed out: all refresh
-   * tokens are deleted and the caller gets a fresh session.
+   * tokens are deleted and the caller gets a fresh session. It all happens under the user's row
+   * lock and the password is re-checked under it, so concurrent logins, refreshes and password
+   * changes cannot leave a session of the old password behind.
    */
   public Session changePassword(UUID userId, String currentPassword, String newPassword) {
     validatePassword(newPassword);
     AppUser user = requireUser(userId);
-    verifyCurrentPassword(user, currentPassword);
-    String hash = encoder.encode(newPassword);
-    tx.executeWithoutResult(
-        status -> {
-          users.setPasswordHash(userId, hash);
-          users.deleteRefreshTokens(userId);
-        });
-    return new Session(tokens.issue(user), user);
+    String key = "email:" + user.email();
+    throttleOrFail(key);
+    String newHash = encoder.encode(newPassword);
+    Session session =
+        tx.execute(
+            status -> {
+              String storedHash = users.lockPasswordHashForUpdate(userId).orElse(null);
+              if (!passwordMatches(currentPassword, storedHash)) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, WRONG_CURRENT_PASSWORD);
+              }
+              users.setPasswordHash(userId, newHash);
+              users.deleteRefreshTokens(userId);
+              return new Session(tokens.issue(user), user);
+            });
+    throttle.reset(key);
+    return session;
   }
 
   /** The user, or 404. */
@@ -146,21 +170,22 @@ public class OwnerAccountService {
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
   }
 
-  /**
-   * 429 when throttled (same key as login), 403 when the password is wrong. A 403 rather than 401,
-   * so a client does not mistake it for an expired session.
-   */
-  private void verifyCurrentPassword(AppUser user, String currentPassword) {
-    String key = "email:" + user.email();
+  /** 429 when the key has used up its attempts (same key as login). */
+  private void throttleOrFail(String key) {
     if (!throttle.tryAttempt(key)) {
       throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, "too many attempts");
     }
-    String hash = users.passwordHashOf(user.id()).orElse(dummyHash);
-    boolean ok = encoder.matches(currentPassword == null ? "" : currentPassword, hash);
-    if (!ok || users.passwordHashOf(user.id()).isEmpty()) {
-      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "wrong current password");
-    }
-    throttle.reset(key);
+  }
+
+  /**
+   * Whether the password matches the stored hash. A missing hash is compared against a dummy, so an
+   * unknown account costs about the same time as a wrong password.
+   */
+  private boolean passwordMatches(String password, String storedHash) {
+    boolean ok =
+        encoder.matches(
+            password == null ? "" : password, storedHash == null ? dummyHash : storedHash);
+    return ok && storedHash != null;
   }
 
   /** Trims and lower-cases the email; 400 unless it is one @ with text on both sides. */

@@ -47,6 +47,8 @@ class OwnerAccountServiceIT extends AbstractPostgresIT {
 
   @Autowired JdbcTemplate jdbc;
 
+  @Autowired org.springframework.transaction.support.TransactionTemplate txTemplate;
+
   @BeforeEach
   void reset() {
     jdbc.update("delete from app_user");
@@ -305,5 +307,162 @@ class OwnerAccountServiceIT extends AbstractPostgresIT {
 
     assertThatThrownBy(() -> owner.changePassword(me.id(), PASSWORD, "another new password"))
         .satisfies(t -> assertThat(statusOf(t)).isEqualTo(429));
+  }
+
+  /**
+   * Runs a transaction that takes the user's row lock, runs {@code inside}, then waits to commit.
+   */
+  private java.util.concurrent.Future<?> holdUserLock(
+      UUID userId,
+      java.util.concurrent.CountDownLatch locked,
+      java.util.concurrent.CountDownLatch release,
+      Runnable inside,
+      java.util.concurrent.ExecutorService pool) {
+    return pool.submit(
+        () ->
+            txTemplate.executeWithoutResult(
+                status -> {
+                  jdbc.queryForObject(
+                      "select 1 from app_user where id = ? for no key update",
+                      Integer.class,
+                      userId);
+                  locked.countDown();
+                  try {
+                    inside.run();
+                    release.await();
+                  } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                  }
+                }));
+  }
+
+  @Test
+  void aRefreshWaitsForAPasswordChangeInProgress(CapturedOutput out) throws Exception {
+    OwnerAccountService.Session session =
+        owner.createOwner(freshSetupToken(out), email(), PASSWORD);
+    UUID id = session.user().id();
+    var pool = java.util.concurrent.Executors.newFixedThreadPool(2, daemon());
+    var locked = new java.util.concurrent.CountDownLatch(1);
+    var release = new java.util.concurrent.CountDownLatch(1);
+    // A password change is in flight and holds the user's lock, but has not touched the tokens yet.
+    var change = holdUserLock(id, locked, release, () -> {}, pool);
+    try {
+      locked.await();
+      var refresh = pool.submit(() -> tokens.refresh(session.tokens().refresh()));
+      Thread.sleep(400);
+      assertThat(refresh.isDone()).as("refresh must wait for the password change").isFalse();
+
+      release.countDown();
+      change.get();
+      assertThat(refresh.get().access()).isNotBlank(); // nothing was revoked, so it then succeeds
+    } finally {
+      release.countDown(); // never leave the row locked, whatever happened above
+      pool.shutdownNow();
+    }
+  }
+
+  @Test
+  void aPasswordChangeRevokesARefreshThatWasAlreadyInFlight(CapturedOutput out) throws Exception {
+    OwnerAccountService.Session session =
+        owner.createOwner(freshSetupToken(out), email(), PASSWORD);
+    UUID id = session.user().id();
+    var pool = java.util.concurrent.Executors.newFixedThreadPool(2, daemon());
+    var midRefresh = new java.util.concurrent.CountDownLatch(1);
+    var finishRefresh = new java.util.concurrent.CountDownLatch(1);
+    String inFlightToken = "in-flight-refresh-token-hash";
+    // A refresh as production does it: share-lock the user, consume the old token, insert the new
+    // one.
+    var refresh =
+        pool.submit(
+            () ->
+                txTemplate.executeWithoutResult(
+                    status -> {
+                      jdbc.queryForObject(
+                          "select 1 from app_user where id = ? for share", Integer.class, id);
+                      jdbc.update("delete from refresh_token where user_id = ?", id);
+                      midRefresh.countDown();
+                      try {
+                        finishRefresh.await();
+                      } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                      }
+                      jdbc.update(
+                          "insert into refresh_token(id, user_id, token_hash, expires_at) values (?, ?, ?, now() + interval '1 day')",
+                          UUID.randomUUID(),
+                          id,
+                          inFlightToken);
+                    }));
+    try {
+      midRefresh.await();
+      var change = pool.submit(() -> owner.changePassword(id, PASSWORD, "a brand new password"));
+      Thread.sleep(400);
+      assertThat(change.isDone()).as("the password change must wait for the refresh").isFalse();
+      finishRefresh.countDown();
+      refresh.get();
+      OwnerAccountService.Session renewed = change.get();
+
+      assertThat(
+              jdbc.queryForObject(
+                  "select count(*) from refresh_token where user_id = ? and token_hash = ?",
+                  Integer.class,
+                  id,
+                  inFlightToken))
+          .as("the refresh token that was in flight must not survive")
+          .isZero();
+      assertThat(tokens.refresh(renewed.tokens().refresh()).access()).isNotBlank();
+    } finally {
+      finishRefresh.countDown();
+      pool.shutdownNow();
+    }
+  }
+
+  @Test
+  void aLoginWithTheOldPasswordWaitsForAPasswordChangeAndThenFails(CapturedOutput out)
+      throws Exception {
+    String email = email();
+    OwnerAccountService.Session session = owner.createOwner(freshSetupToken(out), email, PASSWORD);
+    UUID id = session.user().id();
+    var pool = java.util.concurrent.Executors.newFixedThreadPool(2, daemon());
+    var locked = new java.util.concurrent.CountDownLatch(1);
+    var release = new java.util.concurrent.CountDownLatch(1);
+    String newHash =
+        new org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder()
+            .encode("a brand new password");
+    var change =
+        holdUserLock(
+            id,
+            locked,
+            release,
+            () -> {
+              users.setPasswordHash(id, newHash);
+              users.deleteRefreshTokens(id);
+            },
+            pool);
+    try {
+      locked.await();
+      var login = pool.submit(() -> owner.login(email, PASSWORD));
+      Thread.sleep(400);
+      assertThat(login.isDone()).as("login must wait for the password change").isFalse();
+
+      release.countDown();
+      change.get();
+      assertThatThrownBy(login::get).hasCauseInstanceOf(ResponseStatusException.class);
+      assertThat(
+              jdbc.queryForObject(
+                  "select count(*) from refresh_token where user_id = ?", Integer.class, id))
+          .isZero();
+    } finally {
+      release.countDown();
+      pool.shutdownNow();
+    }
+  }
+
+  /** Daemon threads, so a failed assertion cannot keep the test JVM alive on a blocked thread. */
+  private static java.util.concurrent.ThreadFactory daemon() {
+    return r -> {
+      Thread t = new Thread(r);
+      t.setDaemon(true);
+      return t;
+    };
   }
 }
