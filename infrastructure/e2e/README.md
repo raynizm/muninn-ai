@@ -34,6 +34,8 @@ These need things a test cannot fake. Run them once per release.
 - [ ] Open the web app on a fresh install: "Welcome to Muninn" asks for the setup token, email and password. A wrong token is refused; a password under 10 characters is refused.
 - [ ] After creating the account you are signed in and `/setup` redirects to the recordings list. A second visit never shows the create-account page.
 - [ ] Sign out and sign in again with the email (any letter case) and password. A wrong password and an unknown email show the same message. Five wrong attempts in a row are refused for a while, even with the right password.
+- [ ] In Settings → Account, change the email (wrong current password is refused plainly) and sign out and in with the new one. Change the password: another signed-in browser is signed out within about 15 minutes and can no longer refresh.
+- [ ] **Stats** page: with a known set of recordings, totals, hours, average and the monthly bars match; a recording made just before midnight on the last day of a month counts in the right month for your time zone; recordings without a length are mentioned in the note.
 - [ ] **Forgot password**: restart the backend with `--muninn.reissue-setup-token=true`, read the recovery token from the log, reset the password at `/reset-password`. The old password and the old session stop working; the token cannot be used twice.
 
 ### AI

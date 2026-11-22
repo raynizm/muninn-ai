@@ -32,6 +32,7 @@ The long-term goal is a searchable personal memory you can question: *"What did 
 - **Secrets stay on the server.** Provider API keys are encrypted at rest and never sent to the phone or browser.
 - **Works offline.** The phone records and queues uploads without a connection, and resumes when it is back. (Phones limit background work, so uploads are not promised while the app is closed.)
 - **Safe retries.** Uploads are idempotent, so a flaky network can't create duplicate recordings or transcripts.
+- **Your account and your numbers.** Change your email and password in Settings (the current password is always required, and changing it signs out your other devices). A Stats page shows total recordings, hours recorded, average length and recordings per month.
 - **Simple first run.** Open the web app, paste the one-time setup token from the server log, and choose your email and password. Forgot the password? A recovery token from the server log lets you set a new one.
 - **You keep your data.** Audio is kept until you delete it. Deleting a recording removes the audio and everything derived from it.
 - **AGPL-3.0.** Free software, and it stays free.
@@ -49,7 +50,7 @@ The long-term goal is a searchable personal memory you can question: *"What did 
 | Recording upload and access API | Done |
 | Transcription and summaries | Done |
 | Docker Compose (backend, Postgres, Whisper) | Done |
-| Web app (create account, sign-in, recordings, settings) | Done |
+| Web app (create account, sign-in, recordings, settings, account editing, stats) | Done |
 | Phone app (iOS and Android): record, offline queue, upload, list and detail | Done, needs a real-device check |
 | Phone app sign-in with email and password | Next (it still uses the old SSO browser flow) |
 | Search and chat over memories, multi-model routing, Gemini and Anthropic | Later milestones |
