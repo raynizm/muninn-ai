@@ -13,9 +13,11 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import se.tcmt.muninn.controller.ProviderController.ProviderView;
+import se.tcmt.muninn.dto.AccountRequest;
 import se.tcmt.muninn.dto.ProviderRequest;
 import se.tcmt.muninn.dto.SsoRequest;
 import se.tcmt.muninn.model.AppUser;
+import se.tcmt.muninn.service.OwnerAccountService;
 import se.tcmt.muninn.service.SetupWizardService;
 
 /**
@@ -31,8 +33,28 @@ public class SetupWizardController {
   static final String TOKEN_HEADER = "X-Setup-Token";
 
   private final SetupWizardService wizard;
+  private final OwnerAccountService owner;
 
   public record ModelsRequest(UUID chatModelId, UUID transcriptionModelId) {}
+
+  /** First run: creates the one account with the setup token and signs it in. */
+  @PostMapping("/account")
+  @ResponseStatus(HttpStatus.CREATED)
+  public AuthController.TokenResponse createAccount(
+      @RequestHeader(name = TOKEN_HEADER, required = false) String token,
+      @RequestBody AccountRequest req) {
+    OwnerAccountService.Session session = owner.createOwner(token, req.email(), req.password());
+    return AuthController.response(session.tokens(), session.user());
+  }
+
+  /** Forgot the password: sets a new one using a recovery token printed by the server. */
+  @PutMapping("/account")
+  @ResponseStatus(HttpStatus.NO_CONTENT)
+  public void resetPassword(
+      @RequestHeader(name = TOKEN_HEADER, required = false) String token,
+      @RequestBody AccountRequest req) {
+    owner.resetPassword(token, req.password());
+  }
 
   /** Saves the SSO configuration using the setup token. */
   @PostMapping("/sso")

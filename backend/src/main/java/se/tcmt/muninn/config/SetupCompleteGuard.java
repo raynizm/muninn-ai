@@ -28,7 +28,10 @@ class SetupCompleteGuard implements WebMvcConfigurer, HandlerInterceptor {
     registry.addInterceptor(this).addPathPatterns("/api/setup/**");
   }
 
-  /** Answers 404 for setup endpoints once setup is complete, except status and SSO recovery. */
+  /**
+   * Answers 404 for setup endpoints once setup is complete, except status and the SSO and password
+   * recovery.
+   */
   @Override
   public boolean preHandle(
       HttpServletRequest request, HttpServletResponse response, Object handler) {
@@ -36,7 +39,8 @@ class SetupCompleteGuard implements WebMvcConfigurer, HandlerInterceptor {
     String method = request.getMethod();
     boolean alwaysOpen =
         ("GET".equals(method) && path.equals("/api/setup/status"))
-            || ("PUT".equals(method) && path.equals("/api/setup/sso"));
+            || ("PUT".equals(method)
+                && (path.equals("/api/setup/sso") || path.equals("/api/setup/account")));
     if (!alwaysOpen && setup.isComplete()) {
       throw new ResponseStatusException(HttpStatus.NOT_FOUND);
     }

@@ -158,7 +158,8 @@ public class TokenService {
       throw unauthorized();
     }
     AppUser user = users.findById(row.userId()).orElseThrow(TokenService::unauthorized);
-    if (!policy.domainAllowed(user.email())) {
+    // Accounts with a password (the owner) are not subject to the SSO allowed-domain list.
+    if (!users.hasPassword(user.id()) && !policy.domainAllowed(user.email())) {
       throw unauthorized();
     }
     return issue(user, row.sessionStartedAt());

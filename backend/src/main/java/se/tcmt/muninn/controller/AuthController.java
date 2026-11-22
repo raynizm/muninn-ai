@@ -1,5 +1,6 @@
 package se.tcmt.muninn.controller;
 
+import jakarta.servlet.http.HttpServletRequest;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -11,9 +12,11 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
+import se.tcmt.muninn.dto.AccountRequest;
 import se.tcmt.muninn.model.AppUser;
 import se.tcmt.muninn.service.AuthSettings;
 import se.tcmt.muninn.service.OidcLoginService;
+import se.tcmt.muninn.service.OwnerAccountService;
 import se.tcmt.muninn.service.TokenService;
 
 @RestController
@@ -24,6 +27,7 @@ public class AuthController {
   private static final long ACCESS_TTL_SECONDS = TokenService.ACCESS_TTL.toSeconds();
 
   private final OidcLoginService login;
+  private final OwnerAccountService owner;
   private final TokenService tokens;
   private final AuthSettings settings;
 
@@ -77,6 +81,17 @@ public class AuthController {
     return response(pair, tokens.verifyAccess(pair.access()));
   }
 
+  /** Signs in with email and password; 401 for any bad credentials, 429 when throttled. */
+  @PostMapping("/login")
+  public TokenResponse passwordLogin(@RequestBody AccountRequest req, HttpServletRequest http) {
+    if (isBlank(req.email()) || isBlank(req.password())) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "email and password are required");
+    }
+    OwnerAccountService.Session session =
+        owner.login(req.email(), req.password(), http.getRemoteAddr());
+    return response(session.tokens(), session.user());
+  }
+
   /** Returns the signed-in user. */
   @GetMapping("/me")
   public UserView me(@AuthenticationPrincipal AppUser user) {
@@ -91,7 +106,7 @@ public class AuthController {
   }
 
   /** Builds the token response for a token pair and its user. */
-  private static TokenResponse response(TokenService.TokenPair pair, AppUser u) {
+  static TokenResponse response(TokenService.TokenPair pair, AppUser u) {
     return new TokenResponse(
         pair.access(),
         pair.refresh(),

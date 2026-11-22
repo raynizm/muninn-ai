@@ -52,6 +52,7 @@ public class SecurityConfig {
                     .requestMatchers(
                         HttpMethod.POST,
                         "/api/auth/callback",
+                        "/api/auth/login",
                         "/api/auth/refresh",
                         "/api/auth/logout")
                     .permitAll()
