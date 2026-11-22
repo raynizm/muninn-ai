@@ -144,6 +144,13 @@ public class UserRepository {
     jdbc.update("update app_user set password_hash = ? where id = ?", passwordHash, userId);
   }
 
+  /**
+   * Changes the login email (stored lower-cased); a duplicate raises {@code DuplicateKeyException}.
+   */
+  public void updateEmail(UUID userId, String email) {
+    jdbc.update("update app_user set email = ? where id = ?", normalize(email), userId);
+  }
+
   /** Number of accounts. */
   public long count() {
     Long n = jdbc.queryForObject("select count(*) from app_user", Long.class);

@@ -231,4 +231,79 @@ class OwnerAccountServiceIT extends AbstractPostgresIT {
 
     owner.resetPassword(recovery, "long enough password"); // the token still works
   }
+
+  @Test
+  void changeEmailNeedsTheCurrentPassword(CapturedOutput out) {
+    String email = email();
+    AppUser me = owner.createOwner(freshSetupToken(out), email, PASSWORD).user();
+
+    assertThatThrownBy(() -> owner.changeEmail(me.id(), "not my password", email()))
+        .satisfies(t -> assertThat(statusOf(t)).isEqualTo(403));
+
+    assertThat(users.findById(me.id()).orElseThrow().email()).isEqualTo(email);
+  }
+
+  @Test
+  void changeEmailUpdatesTheLoginName(CapturedOutput out) {
+    String email = email();
+    AppUser me = owner.createOwner(freshSetupToken(out), email, PASSWORD).user();
+    String newEmail = email();
+
+    AppUser changed = owner.changeEmail(me.id(), PASSWORD, newEmail.toUpperCase());
+
+    assertThat(changed.email()).isEqualTo(newEmail);
+    assertThat(owner.login(newEmail, PASSWORD).user().id()).isEqualTo(me.id());
+    assertThatThrownBy(() -> owner.login(email, PASSWORD))
+        .satisfies(t -> assertThat(statusOf(t)).isEqualTo(401));
+  }
+
+  @Test
+  void changeEmailRejectsABadEmail(CapturedOutput out) {
+    AppUser me = owner.createOwner(freshSetupToken(out), email(), PASSWORD).user();
+
+    assertThatThrownBy(() -> owner.changeEmail(me.id(), PASSWORD, "no-at-sign"))
+        .satisfies(t -> assertThat(statusOf(t)).isEqualTo(400));
+  }
+
+  @Test
+  void changePasswordRevokesOtherSessionsAndKeepsTheCurrentOne(CapturedOutput out) {
+    String email = email();
+    OwnerAccountService.Session first = owner.createOwner(freshSetupToken(out), email, PASSWORD);
+
+    OwnerAccountService.Session second =
+        owner.changePassword(first.user().id(), PASSWORD, "a brand new password");
+
+    assertThatThrownBy(() -> tokens.refresh(first.tokens().refresh()))
+        .satisfies(t -> assertThat(statusOf(t)).isEqualTo(401));
+    assertThat(tokens.verifyAccess(second.tokens().access()).id()).isEqualTo(first.user().id());
+    assertThat(tokens.refresh(second.tokens().refresh()).access()).isNotBlank();
+    assertThatThrownBy(() -> owner.login(email, PASSWORD))
+        .satisfies(t -> assertThat(statusOf(t)).isEqualTo(401));
+    assertThat(owner.login(email, "a brand new password").user().email()).isEqualTo(email);
+  }
+
+  @Test
+  void changePasswordRejectsAWeakPasswordAndKeepsTheOldOne(CapturedOutput out) {
+    String email = email();
+    AppUser me = owner.createOwner(freshSetupToken(out), email, PASSWORD).user();
+
+    assertThatThrownBy(() -> owner.changePassword(me.id(), PASSWORD, "short"))
+        .satisfies(t -> assertThat(statusOf(t)).isEqualTo(400));
+
+    assertThat(owner.login(email, PASSWORD).user().id()).isEqualTo(me.id());
+  }
+
+  @Test
+  void wrongCurrentPasswordIsThrottled(CapturedOutput out) {
+    AppUser me = owner.createOwner(freshSetupToken(out), email(), PASSWORD).user();
+
+    for (int i = 0; i < 5; i++) {
+      assertThatThrownBy(
+              () -> owner.changePassword(me.id(), "wrong wrong wrong", "another new password"))
+          .satisfies(t -> assertThat(statusOf(t)).isEqualTo(403));
+    }
+
+    assertThatThrownBy(() -> owner.changePassword(me.id(), PASSWORD, "another new password"))
+        .satisfies(t -> assertThat(statusOf(t)).isEqualTo(429));
+  }
 }

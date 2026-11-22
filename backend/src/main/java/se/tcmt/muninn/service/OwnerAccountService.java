@@ -2,7 +2,9 @@ package se.tcmt.muninn.service;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Locale;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -105,6 +107,60 @@ public class OwnerAccountService {
     }
     users.setPasswordHash(owner.id(), encoder.encode(newPassword));
     users.deleteRefreshTokens(owner.id());
+  }
+
+  /** Changes the login email; needs the current password. 409 when the email is taken. */
+  public AppUser changeEmail(UUID userId, String currentPassword, String newEmail) {
+    String normalized = validEmail(newEmail);
+    AppUser user = requireUser(userId);
+    verifyCurrentPassword(user, currentPassword);
+    try {
+      users.updateEmail(userId, normalized);
+    } catch (DuplicateKeyException e) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT, "email already in use");
+    }
+    return requireUser(userId);
+  }
+
+  /**
+   * Changes the password; needs the current one. Every other session is signed out: all refresh
+   * tokens are deleted and the caller gets a fresh session.
+   */
+  public Session changePassword(UUID userId, String currentPassword, String newPassword) {
+    validatePassword(newPassword);
+    AppUser user = requireUser(userId);
+    verifyCurrentPassword(user, currentPassword);
+    String hash = encoder.encode(newPassword);
+    tx.executeWithoutResult(
+        status -> {
+          users.setPasswordHash(userId, hash);
+          users.deleteRefreshTokens(userId);
+        });
+    return new Session(tokens.issue(user), user);
+  }
+
+  /** The user, or 404. */
+  private AppUser requireUser(UUID userId) {
+    return users
+        .findById(userId)
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
+  }
+
+  /**
+   * 429 when throttled (same key as login), 403 when the password is wrong. A 403 rather than 401,
+   * so a client does not mistake it for an expired session.
+   */
+  private void verifyCurrentPassword(AppUser user, String currentPassword) {
+    String key = "email:" + user.email();
+    if (!throttle.tryAttempt(key)) {
+      throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, "too many attempts");
+    }
+    String hash = users.passwordHashOf(user.id()).orElse(dummyHash);
+    boolean ok = encoder.matches(currentPassword == null ? "" : currentPassword, hash);
+    if (!ok || users.passwordHashOf(user.id()).isEmpty()) {
+      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "wrong current password");
+    }
+    throttle.reset(key);
   }
 
   /** Trims and lower-cases the email; 400 unless it is one @ with text on both sides. */
