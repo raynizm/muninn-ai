@@ -1,35 +1,56 @@
 import { screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { Route, Routes } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
-import { renderPage } from "../test-utils";
-import { LoginCallback } from "./Login";
+import { ApiError } from "@muninn/api";
+import { renderPage, user } from "../test-utils";
+import { Login } from "./Login";
 
-function renderCallback(query: string, client = {}) {
+const tokenResponse = { accessToken: "A", refreshToken: "R", expiresIn: 900, user: user("ADMIN") };
+
+function renderLogin(client = {}, signedInAs: "ADMIN" | "USER" | null = null) {
   return renderPage(
     <Routes>
-      <Route path="/login/callback" element={<LoginCallback />} />
+      <Route path="/login" element={<Login />} />
+      <Route path="/" element={<p>Home screen</p>} />
     </Routes>,
     client,
-    { signedInAs: null, route: `/login/callback${query}` },
+    { signedInAs, route: "/login" },
   );
 }
 
-describe("LoginCallback", () => {
-  it("handsAppSignInsBackToTheApp", async () => {
-    const replace = vi.fn();
-    vi.spyOn(window, "location", "get").mockReturnValue({ ...window.location, replace } as unknown as Location);
-    const callback = vi.fn();
+describe("Login", () => {
+  it("signsInWithEmailAndPassword", async () => {
+    const login = vi.fn(async () => tokenResponse);
+    const me = vi.fn().mockRejectedValueOnce(new Error("signed out")).mockResolvedValue(user("ADMIN"));
+    renderLogin({ login, me });
 
-    renderCallback("?code=abc&state=app%3Axyz", { callback });
+    await userEvent.type(await screen.findByLabelText(/email/i), "ann@example.com");
+    await userEvent.type(screen.getByLabelText(/password/i), "long enough password");
+    await userEvent.click(screen.getByRole("button", { name: /sign in/i }));
 
-    expect(await screen.findByText(/returning to the muninn app/i)).toBeInTheDocument();
-    expect(replace).toHaveBeenCalledWith("muninn://auth/callback?code=abc&state=app%3Axyz");
-    expect(callback).not.toHaveBeenCalled(); // the app, not the browser, exchanges the code
-    vi.restoreAllMocks();
+    expect(login).toHaveBeenCalledWith("ann@example.com", "long enough password");
+    expect(await screen.findByText("Home screen")).toBeInTheDocument();
   });
 
-  it("rejectsAWebSignInWithoutAPendingLogin", async () => {
-    renderCallback("?code=abc&state=web-state");
-    expect(await screen.findByText(/could not be verified/i)).toBeInTheDocument();
+  it("showsAnErrorForAWrongPassword", async () => {
+    const login = vi.fn().mockRejectedValue(new ApiError(401, "invalid email or password"));
+    renderLogin({ login });
+
+    await userEvent.type(await screen.findByLabelText(/email/i), "ann@example.com");
+    await userEvent.type(screen.getByLabelText(/password/i), "nope nope nope");
+    await userEvent.click(screen.getByRole("button", { name: /sign in/i }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("invalid email or password");
+  });
+
+  it("linksToPasswordReset", async () => {
+    renderLogin();
+    expect(await screen.findByRole("link", { name: /forgot your password/i })).toHaveAttribute("href", "/reset-password");
+  });
+
+  it("redirectsAwayWhenAlreadySignedIn", async () => {
+    renderLogin({}, "ADMIN");
+    expect(await screen.findByText("Home screen")).toBeInTheDocument();
   });
 });

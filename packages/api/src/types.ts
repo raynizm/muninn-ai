@@ -130,26 +130,6 @@ export type SettingsUpdate = Partial<
   Pick<Settings, "userOverrideEnabled" | "allowedDomains" | "defaultChatModelId" | "defaultTranscriptionModelId">
 >;
 
-export interface SsoInput {
-  issuer: string;
-  clientId: string;
-  clientSecret: string;
-  allowedDomains: string[];
-  tenantId?: string | null;
-}
-
-export interface SsoView {
-  issuer: string;
-  clientId: string;
-  allowedDomains: string[];
-  tenantId: string | null;
-}
-
-export interface DefaultModels {
-  chatModelId: string | null;
-  transcriptionModelId: string | null;
-}
-
 export interface UploadOptions {
   createdAt?: string;
   durationMs?: number;

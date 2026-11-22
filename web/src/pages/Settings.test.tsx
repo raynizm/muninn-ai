@@ -7,7 +7,7 @@ import { Settings } from "./Settings";
 
 const provider = (over: Partial<Provider> = {}): Provider => ({
   id: "p1",
-  scope: "USER",
+  scope: "SYSTEM",
   name: "My Ollama",
   baseUrl: "http://ollama:11434",
   enabled: true,
@@ -30,32 +30,48 @@ const settings = (): SettingsData => ({
 });
 
 describe("Settings", () => {
-  it("nonAdminDoesNotSeeAdminSettings", async () => {
-    const getSettings = vi.fn(async () => settings());
-    renderPage(<Settings />, { listProviders: vi.fn(async () => []), getSettings }, { signedInAs: "USER" });
-
-    expect(await screen.findByRole("heading", { name: /your ai provider/i })).toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: /administration/i })).not.toBeInTheDocument();
-    expect(screen.queryByText(/allowed email domains/i)).not.toBeInTheDocument();
-    expect(getSettings).not.toHaveBeenCalled();
-  });
-
-  it("adminSeesDomainsOverrideAndDefaultModels", async () => {
+  it("showsProvidersAndDefaultModelsWithoutAdminWording", async () => {
     renderPage(
       <Settings />,
       {
-        listProviders: vi.fn(async () => []),
+        listProviders: vi.fn(async () => [provider()]),
         listModels: vi.fn(async () => []),
         getSettings: vi.fn(async () => settings()),
       },
       { signedInAs: "ADMIN" },
     );
 
-    expect(await screen.findByRole("heading", { name: /administration/i })).toBeInTheDocument();
-    expect(await screen.findByLabelText(/allowed email domains/i)).toHaveValue("example.com");
-    expect(screen.getByLabelText(/let users use their own/i)).toBeChecked();
-    expect(screen.getByLabelText(/default summary/i)).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: /^ai providers$/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /^default models$/i })).toBeInTheDocument();
+    expect(await screen.findByLabelText(/default summary/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/default transcription/i)).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: /administration/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/allowed email domains/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/let users use their own/i)).not.toBeInTheDocument();
+  });
+
+  it("savesTheDefaultModels", async () => {
+    const updateSettings = vi.fn(async () => settings());
+    renderPage(
+      <Settings />,
+      {
+        listProviders: vi.fn(async () => [provider()]),
+        listModels: vi.fn(async () => [
+          { id: "m-chat", providerId: "p1", modelIdentifier: "llama3", capabilities: ["chat"], enabled: true },
+          { id: "m-stt", providerId: "p1", modelIdentifier: "whisper-small", capabilities: ["transcription"], enabled: true },
+        ]),
+        getSettings: vi.fn(async () => settings()),
+        updateSettings,
+      },
+      { signedInAs: "ADMIN" },
+    );
+
+    await screen.findByRole("option", { name: "llama3" }); // the model list loads after the form shows
+    await userEvent.selectOptions(await screen.findByLabelText(/default summary/i), "m-chat");
+    await userEvent.selectOptions(screen.getByLabelText(/default transcription/i), "m-stt");
+    await userEvent.click(screen.getByRole("button", { name: /save default models/i }));
+
+    expect(updateSettings).toHaveBeenCalledWith({ defaultChatModelId: "m-chat", defaultTranscriptionModelId: "m-stt" });
   });
 
   it("providerFormNeverPrefillsKey", async () => {

@@ -4,13 +4,14 @@ import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { useApi } from "./api";
 import { useAuth } from "./auth/AuthProvider";
 import { Layout } from "./components/Layout";
-import { Login, LoginCallback } from "./pages/Login";
+import { CreateAccount } from "./pages/CreateAccount";
+import { Login } from "./pages/Login";
 import { RecordingDetail } from "./pages/RecordingDetail";
 import { Recordings } from "./pages/Recordings";
 import { Settings } from "./pages/Settings";
-import { SetupWizard } from "./pages/SetupWizard";
+import { ResetPassword } from "./pages/ResetPassword";
 
-/** Sends everyone to /setup until first-run setup is complete, and away from it afterwards. */
+/** First run: everything leads to the create-account page. Afterwards that page is gone. */
 function SetupGate({ children }: { children: ReactNode }) {
   const api = useApi();
   const { pathname } = useLocation();
@@ -21,8 +22,7 @@ function SetupGate({ children }: { children: ReactNode }) {
 
   const complete = status.data.complete;
   const onSetup = pathname === "/setup";
-  const onCallback = pathname === "/login/callback";
-  if (!complete && !onSetup && !onCallback) return <Navigate to="/setup" replace />;
+  if (!complete && !onSetup) return <Navigate to="/setup" replace />;
   if (complete && onSetup) return <Navigate to="/" replace />;
   return <>{children}</>;
 }
@@ -39,8 +39,8 @@ export function AppRoutes() {
     <SetupGate>
       <Routes>
         <Route path="/login" element={<Login />} />
-        <Route path="/login/callback" element={<LoginCallback />} />
-        <Route path="/setup" element={<SetupWizard />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
+        <Route path="/setup" element={<CreateAccount />} />
         <Route
           element={
             <RequireAuth>

@@ -109,4 +109,50 @@ describe("api client", () => {
     const [url] = fetchMock.mock.calls[0] as unknown as [string];
     expect(url).toBe("https://m.example/api/auth/me");
   });
+
+  it("loginPostsCredentialsAndStoresTokens", async () => {
+    const store = memoryStore(null);
+    const fetchMock = vi.fn(async () => json(200, tokenResponse("A9", "R9")));
+    const client = createClient("https://m.example", store, fetchMock);
+
+    const res = await client.login("ann@example.com", "correct horse");
+
+    expect(res.user.email).toBe("a@b.se");
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe("https://m.example/api/auth/login");
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(init.body as string)).toEqual({ email: "ann@example.com", password: "correct horse" });
+    expect(new Headers(init.headers).get("Authorization")).toBeNull();
+    expect(store.current).toEqual({ accessToken: "A9", refreshToken: "R9" });
+  });
+
+  it("createAccountSendsTheSetupTokenHeader", async () => {
+    const store = memoryStore(null);
+    const fetchMock = vi.fn(async () => json(201, tokenResponse("A1", "R1")));
+    const client = createClient("https://m.example", store, fetchMock);
+
+    await client.createAccount("setup-token", "ann@example.com", "correct horse");
+
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe("https://m.example/api/setup/account");
+    expect(init.method).toBe("POST");
+    expect(new Headers(init.headers).get("X-Setup-Token")).toBe("setup-token");
+    expect(JSON.parse(init.body as string)).toEqual({ email: "ann@example.com", password: "correct horse" });
+    expect(store.current).toEqual({ accessToken: "A1", refreshToken: "R1" });
+  });
+
+  it("resetPasswordSendsTheRecoveryTokenHeaderAndNoBearer", async () => {
+    const fetchMock = vi.fn(async () => new Response(null, { status: 204 }));
+    const client = createClient("https://m.example", memoryStore({ accessToken: "A", refreshToken: "R" }), fetchMock);
+
+    await client.resetPassword("recovery-token", "a brand new password");
+
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe("https://m.example/api/setup/account");
+    expect(init.method).toBe("PUT");
+    const headers = new Headers(init.headers);
+    expect(headers.get("X-Setup-Token")).toBe("recovery-token");
+    expect(headers.get("Authorization")).toBeNull();
+    expect(JSON.parse(init.body as string)).toEqual({ password: "a brand new password" });
+  });
 });

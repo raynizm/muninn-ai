@@ -3,15 +3,12 @@ import type {
   AuthConfig,
   CallbackRequest,
   ConnectionTestResult,
-  DefaultModels,
   Provider,
   ProviderInput,
   Recording,
   RecordingDetail,
   Settings,
   SettingsUpdate,
-  SsoInput,
-  SsoView,
   TokenPair,
   TokenResponse,
   TokenStore,
@@ -47,12 +44,11 @@ export interface ApiClient {
   me(): Promise<UserView>;
 
   setupStatus(): Promise<{ complete: boolean }>;
-  verifySetupToken(token: string): Promise<{ valid: boolean }>;
-  saveSso(setupToken: string, sso: SsoInput): Promise<SsoView>;
-  recoverSso(recoveryToken: string, sso: SsoInput): Promise<SsoView>;
-  createSystemProvider(input: ProviderInput): Promise<Provider>;
-  setDefaultModels(models: DefaultModels): Promise<DefaultModels>;
-  finishSetup(): Promise<{ complete: boolean }>;
+  /** First run: creates the one account with the setup token and signs it in. */
+  createAccount(setupToken: string, email: string, password: string): Promise<TokenResponse>;
+  login(email: string, password: string): Promise<TokenResponse>;
+  /** Sets a new password with a recovery token printed by the server. */
+  resetPassword(recoveryToken: string, password: string): Promise<void>;
 
   listRecordings(updatedSince?: string): Promise<Recording[]>;
   getRecording(id: string): Promise<RecordingDetail>;
@@ -183,24 +179,33 @@ export function createClient(
     me: () => json("/api/auth/me"),
 
     setupStatus: () => json("/api/setup/status", { auth: false }),
-    verifySetupToken: (token) => json("/api/setup/verify", { method: "POST", auth: false, ...jsonBody({ token }) }),
-    saveSso: (setupToken, sso) =>
-      json("/api/setup/sso", {
+    async createAccount(setupToken, email, password) {
+      const res = await json<TokenResponse>("/api/setup/account", {
         method: "POST",
         auth: false,
         headers: { "Content-Type": "application/json", "X-Setup-Token": setupToken },
-        body: JSON.stringify(sso),
-      }),
-    recoverSso: (recoveryToken, sso) =>
-      json("/api/setup/sso", {
+        body: JSON.stringify({ email, password }),
+      });
+      await tokens.set({ accessToken: res.accessToken, refreshToken: res.refreshToken });
+      return res;
+    },
+    async login(email, password) {
+      const res = await json<TokenResponse>("/api/auth/login", {
+        method: "POST",
+        auth: false,
+        ...jsonBody({ email, password }),
+      });
+      await tokens.set({ accessToken: res.accessToken, refreshToken: res.refreshToken });
+      return res;
+    },
+    async resetPassword(recoveryToken, password) {
+      await request("/api/setup/account", {
         method: "PUT",
         auth: false,
         headers: { "Content-Type": "application/json", "X-Setup-Token": recoveryToken },
-        body: JSON.stringify(sso),
-      }),
-    createSystemProvider: (input) => json("/api/setup/provider", { method: "POST", ...jsonBody(input) }),
-    setDefaultModels: (models) => json("/api/setup/models", { method: "POST", ...jsonBody(models) }),
-    finishSetup: () => json("/api/setup/finish", { method: "POST" }),
+        body: JSON.stringify({ password }),
+      });
+    },
 
     listRecordings: (updatedSince) =>
       json(`/api/recordings${updatedSince ? `?updatedSince=${encodeURIComponent(updatedSince)}` : ""}`),
