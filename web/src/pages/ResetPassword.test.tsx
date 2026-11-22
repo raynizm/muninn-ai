@@ -1,6 +1,7 @@
 import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
+import { ApiError } from "@muninn/api";
 import { renderPage } from "../test-utils";
 import { ResetPassword } from "./ResetPassword";
 
@@ -26,6 +27,16 @@ describe("ResetPassword", () => {
     await fill("recovery-1", "a brand new password", "something else entirely");
     expect(screen.getByRole("button", { name: /reset password/i })).toBeDisabled();
     expect(screen.getByText(/do not match/i)).toBeInTheDocument();
+  });
+
+  it("explainsAnInvalidRecoveryToken", async () => {
+    const resetPassword = vi.fn().mockRejectedValue(new ApiError(401, "Unauthorized"));
+    renderPage(<ResetPassword />, { resetPassword }, { signedInAs: null });
+
+    await fill("used-already", "a brand new password");
+    await userEvent.click(screen.getByRole("button", { name: /reset password/i }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(/recovery token is not valid or was already used/i);
   });
 
   it("showsASuccessMessageWithALoginLink", async () => {

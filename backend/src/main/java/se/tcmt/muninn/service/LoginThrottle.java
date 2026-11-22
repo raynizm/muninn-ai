@@ -12,8 +12,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 /**
- * Slows down password guessing: five failures per key within fifteen minutes block that key. State
- * is in memory (Muninn runs as a single instance), so a restart clears it.
+ * Slows down password guessing: five login attempts per key within fifteen minutes block that key
+ * (a successful login clears the count). State is in memory (Muninn runs as a single instance), so
+ * a restart clears it.
  */
 @Component
 public class LoginThrottle {
@@ -38,31 +39,27 @@ public class LoginThrottle {
     this.clock = clock;
   }
 
-  /** Whether the key has reached the failure limit within the window. */
-  public boolean isBlocked(String key) {
-    Deque<Instant> recent = failures.get(normalize(key));
-    if (recent == null) {
-      return false;
-    }
-    synchronized (recent) {
-      prune(recent);
-      return recent.size() >= MAX_FAILURES;
-    }
-  }
-
-  /** Counts one failed attempt for the key. */
-  public void recordFailure(String key) {
+  /**
+   * Counts one login attempt for the key and says whether it may go ahead. Check and count are one
+   * atomic step, so parallel requests cannot all slip in before the limit is seen. Call {@link
+   * #reset} after a successful login.
+   */
+  public boolean tryAttempt(String key) {
     if (failures.size() >= MAX_KEYS) {
       evictExpired();
     }
     Deque<Instant> recent = failures.computeIfAbsent(normalize(key), k -> new ArrayDeque<>());
     synchronized (recent) {
       prune(recent);
+      if (recent.size() >= MAX_FAILURES) {
+        return false;
+      }
       recent.addLast(clock.instant());
+      return true;
     }
   }
 
-  /** Forgets all failures for the key (after a successful login). */
+  /** Forgets all attempts for the key (after a successful login). */
   public void reset(String key) {
     failures.remove(normalize(key));
   }

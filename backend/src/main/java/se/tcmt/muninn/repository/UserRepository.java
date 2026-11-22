@@ -114,6 +114,14 @@ public class UserRepository {
         .findFirst();
   }
 
+  /** Whether any account signs in with a password, i.e. this server has a single owner. */
+  public boolean hasPasswordAccount() {
+    return Boolean.TRUE.equals(
+        jdbc.queryForObject(
+            "select exists(select 1 from app_user where password_hash is not null)",
+            Boolean.class));
+  }
+
   /** Whether the account signs in with a password. */
   public boolean hasPassword(UUID userId) {
     return passwordHashOf(userId).isPresent();

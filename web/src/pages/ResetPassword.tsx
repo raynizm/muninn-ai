@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { useApi } from "../api";
 import { confirmationProblem, passwordProblem } from "../auth/passwordRules";
+import { describeError } from "../errors";
 
 /** Forgot the password: a recovery token printed by the server lets the owner choose a new one. */
 export function ResetPassword() {
@@ -25,7 +26,17 @@ export function ResetPassword() {
       await api.resetPassword(token.trim(), password);
       setDone(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not reset the password.");
+      setError(
+        describeError(
+          err,
+          {
+            400: "That password cannot be used.",
+            401: "That recovery token is not valid or was already used.",
+            404: "There is no account to reset yet.",
+          },
+          "Could not reset the password. Please try again.",
+        ),
+      );
     } finally {
       setBusy(false);
     }

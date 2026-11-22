@@ -71,23 +71,24 @@ public class OwnerAccountService {
     return new Session(tokens.issue(user), user);
   }
 
-  /** Signs in with email and password; throttled per email and per client address. */
-  public Session login(String email, String password, String clientKey) {
+  /**
+   * Signs in with email and password. Attempts are throttled per email only: a per-address limit
+   * would lock everyone out behind a reverse proxy, and a single-owner server has only one email
+   * worth guessing.
+   */
+  public Session login(String email, String password) {
     String normalized = email == null ? "" : email.trim().toLowerCase(Locale.ROOT);
-    String emailKey = "email:" + normalized;
-    String clientThrottleKey = "client:" + clientKey;
-    if (throttle.isBlocked(emailKey) || throttle.isBlocked(clientThrottleKey)) {
+    String key = "email:" + normalized;
+    if (!throttle.tryAttempt(key)) {
       throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, "too many attempts");
     }
     AppUser user = users.findByEmail(normalized).orElse(null);
     String hash = user == null ? null : users.passwordHashOf(user.id()).orElse(null);
     boolean ok = encoder.matches(password == null ? "" : password, hash == null ? dummyHash : hash);
     if (!ok || user == null || hash == null) {
-      throttle.recordFailure(emailKey);
-      throttle.recordFailure(clientThrottleKey);
       throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, BAD_CREDENTIALS);
     }
-    throttle.reset(emailKey);
+    throttle.reset(key);
     return new Session(tokens.issue(user), user);
   }
 

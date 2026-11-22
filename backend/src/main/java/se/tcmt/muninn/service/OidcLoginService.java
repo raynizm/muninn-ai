@@ -130,6 +130,12 @@ public class OidcLoginService {
     if (bound.isPresent()) {
       return bound.get();
     }
+    if (users.hasPasswordAccount()) {
+      // A server with a password owner is single-user: SSO must not create a second account or
+      // attach
+      // itself to the owner's.
+      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "this server has a single owner");
+    }
     Optional<AppUser> sameEmail = users.findByEmail(id.email());
     if (sameEmail.isPresent()) {
       users.bindOidcIdentityIfUnbound(sameEmail.get().id(), id.issuer(), id.subject());

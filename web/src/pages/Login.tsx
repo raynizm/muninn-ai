@@ -2,6 +2,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthProvider";
+import { describeError } from "../errors";
 
 export function Login() {
   const { user, loading, loginWithPassword } = useAuth();
@@ -25,7 +26,7 @@ export function Login() {
       await queryClient.invalidateQueries({ queryKey: ["setup-status"] });
       navigate("/", { replace: true });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Sign-in failed.");
+      setError(describeError(err, { 401: "Wrong email or password." }, "Sign-in failed. Please try again."));
     } finally {
       setBusy(false);
     }

@@ -44,13 +44,23 @@ describe("CreateAccount", () => {
   });
 
   it("showsTheServerError", async () => {
-    const createAccount = vi.fn().mockRejectedValue(new ApiError(401, "invalid setup token"));
+    const createAccount = vi.fn().mockRejectedValue(new ApiError(401, "Unauthorized"));
     renderPage(<CreateAccount />, { createAccount }, { signedInAs: null });
 
     await fill("wrong", "ann@example.com", "long enough password");
     await userEvent.click(screen.getByRole("button", { name: /create account/i }));
 
-    expect(await screen.findByText("invalid setup token")).toBeInTheDocument();
+    expect(await screen.findByText("That setup token is not valid.")).toBeInTheDocument();
+  });
+
+  it("sendsPeopleToSignInWhenSetupIsAlreadyFinished", async () => {
+    const createAccount = vi.fn().mockRejectedValue(new ApiError(404, "Not Found"));
+    renderPage(<CreateAccount />, { createAccount }, { signedInAs: null });
+
+    await fill("tok", "ann@example.com", "long enough password");
+    await userEvent.click(screen.getByRole("button", { name: /create account/i }));
+
+    expect(await screen.findByText(/setup is already finished/i)).toBeInTheDocument();
   });
 
   it("tellsWhereToFindTheSetupToken", () => {

@@ -3,6 +3,7 @@ import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthProvider";
 import { confirmationProblem, passwordProblem } from "../auth/passwordRules";
+import { describeError } from "../errors";
 
 /** First run: the setup token from the server log plus the owner's email and password. */
 export function CreateAccount() {
@@ -29,7 +30,18 @@ export function CreateAccount() {
       await queryClient.invalidateQueries({ queryKey: ["setup-status"] });
       navigate("/", { replace: true });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not create the account.");
+      setError(
+        describeError(
+          err,
+          {
+            400: "Check the email and password and try again.",
+            401: "That setup token is not valid.",
+            404: "Setup is already finished. Sign in instead.",
+            409: "An account already exists. Sign in instead.",
+          },
+          "Could not create the account. Please try again.",
+        ),
+      );
     } finally {
       setBusy(false);
     }

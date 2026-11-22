@@ -58,6 +58,8 @@ class OidcLoginServiceIT extends AbstractPostgresIT {
 
   @Autowired JdbcTemplate jdbc;
 
+  @Autowired se.tcmt.muninn.repository.UserRepository users;
+
   @AfterAll
   static void stopIdp() {
     IDP.close();
@@ -82,6 +84,24 @@ class OidcLoginServiceIT extends AbstractPostgresIT {
     assertThatThrownBy(call)
         .isInstanceOfSatisfying(
             ResponseStatusException.class, e -> assertThat(e.getStatusCode()).isEqualTo(expected));
+  }
+
+  @Test
+  void ssoNeverCreatesOrBindsAnAccountOnceAPasswordOwnerExists() {
+    setup.markComplete();
+    users.insertOwner(
+        "owner@acme.com", null, "$2a$10$notarealhashnotarealhashnotarealhashnotarealhashnotarea");
+
+    assertStatus(
+        HttpStatus.FORBIDDEN,
+        () -> login.login(code(IDP.validClaims("ann@acme.com").build()), VERIFIER, REDIRECT));
+    // Even an identity with the owner's own email must not attach to the owner's account.
+    assertStatus(
+        HttpStatus.FORBIDDEN,
+        () -> login.login(code(IDP.validClaims("owner@acme.com").build()), VERIFIER, REDIRECT));
+
+    assertThat(userCount()).isEqualTo(1);
+    assertThat(jdbc.queryForObject("select oidc_subject from app_user", String.class)).isNull();
   }
 
   @Test

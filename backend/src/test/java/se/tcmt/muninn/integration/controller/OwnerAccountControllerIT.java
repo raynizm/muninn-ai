@@ -72,16 +72,6 @@ class OwnerAccountControllerIT extends AbstractPostgresIT {
     return lastMatch(SETUP_TOKEN, out);
   }
 
-  /** Each test client gets its own address so the in-memory throttle never leaks between tests. */
-  private static MockHttpServletRequestBuilder from(
-      MockHttpServletRequestBuilder b, String address) {
-    return b.with(
-        request -> {
-          request.setRemoteAddr(address);
-          return request;
-        });
-  }
-
   private MockHttpServletRequestBuilder withJson(MockHttpServletRequestBuilder b, Object body)
       throws Exception {
     return b.contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(body));
@@ -146,10 +136,7 @@ class OwnerAccountControllerIT extends AbstractPostgresIT {
     JsonNode login =
         body(
             mvc.perform(
-                    from(
-                        withJson(
-                            post("/api/auth/login"), Map.of("email", email, "password", PASSWORD)),
-                        "10.0.0.1"))
+                    withJson(post("/api/auth/login"), Map.of("email", email, "password", PASSWORD)))
                 .andExpect(status().isOk())
                 .andReturn());
     assertThat(login.at("/user/role").asText()).isEqualTo("ADMIN");
@@ -169,20 +156,15 @@ class OwnerAccountControllerIT extends AbstractPostgresIT {
 
     MvcResult wrongPassword =
         mvc.perform(
-                from(
-                    withJson(
-                        post("/api/auth/login"),
-                        Map.of("email", email, "password", "nope nope nope")),
-                    "10.0.0.2"))
+                withJson(
+                    post("/api/auth/login"), Map.of("email", email, "password", "nope nope nope")))
             .andExpect(status().isUnauthorized())
             .andReturn();
     MvcResult unknownEmail =
         mvc.perform(
-                from(
-                    withJson(
-                        post("/api/auth/login"),
-                        Map.of("email", email(), "password", "nope nope nope")),
-                    "10.0.0.3"))
+                withJson(
+                    post("/api/auth/login"),
+                    Map.of("email", email(), "password", "nope nope nope")))
             .andExpect(status().isUnauthorized())
             .andReturn();
     assertThat(wrongPassword.getResponse().getErrorMessage())
@@ -193,23 +175,14 @@ class OwnerAccountControllerIT extends AbstractPostgresIT {
 
     for (int i = 0; i < 4; i++) { // five failures for this email in total
       mvc.perform(
-              from(
-                  withJson(
-                      post("/api/auth/login"),
-                      Map.of("email", email, "password", "nope nope nope")),
-                  "10.0.1." + i))
+              withJson(
+                  post("/api/auth/login"), Map.of("email", email, "password", "nope nope nope")))
           .andExpect(status().isUnauthorized());
     }
-    mvc.perform(
-            from(
-                withJson(post("/api/auth/login"), Map.of("email", email, "password", PASSWORD)),
-                "10.0.0.4"))
+    mvc.perform(withJson(post("/api/auth/login"), Map.of("email", email, "password", PASSWORD)))
         .andExpect(status().isTooManyRequests());
 
-    mvc.perform(
-            from(
-                withJson(post("/api/auth/login"), Map.of("email", " ", "password", PASSWORD)),
-                "10.0.0.5"))
+    mvc.perform(withJson(post("/api/auth/login"), Map.of("email", " ", "password", PASSWORD)))
         .andExpect(status().isBadRequest());
   }
 
@@ -225,17 +198,12 @@ class OwnerAccountControllerIT extends AbstractPostgresIT {
                 .header(HEADER, recovery))
         .andExpect(status().isNoContent());
 
-    mvc.perform(
-            from(
-                withJson(post("/api/auth/login"), Map.of("email", email, "password", PASSWORD)),
-                "10.0.0.6"))
+    mvc.perform(withJson(post("/api/auth/login"), Map.of("email", email, "password", PASSWORD)))
         .andExpect(status().isUnauthorized());
     mvc.perform(
-            from(
-                withJson(
-                    post("/api/auth/login"),
-                    Map.of("email", email, "password", "a brand new password")),
-                "10.0.0.7"))
+            withJson(
+                post("/api/auth/login"),
+                Map.of("email", email, "password", "a brand new password")))
         .andExpect(status().isOk());
     mvc.perform(
             withJson(

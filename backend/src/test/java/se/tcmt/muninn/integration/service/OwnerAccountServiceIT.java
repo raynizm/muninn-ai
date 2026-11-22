@@ -70,10 +70,6 @@ class OwnerAccountServiceIT extends AbstractPostgresIT {
     return "owner-" + UUID.randomUUID() + "@example.com";
   }
 
-  private static String client() {
-    return "client-" + UUID.randomUUID();
-  }
-
   private static int statusOf(Throwable t) {
     return ((ResponseStatusException) t).getStatusCode().value();
   }
@@ -143,7 +139,7 @@ class OwnerAccountServiceIT extends AbstractPostgresIT {
     String email = email();
     owner.createOwner(freshSetupToken(out), email, PASSWORD);
 
-    OwnerAccountService.Session session = owner.login(email, PASSWORD, client());
+    OwnerAccountService.Session session = owner.login(email, PASSWORD);
 
     assertThat(session.user().email()).isEqualTo(email);
     assertThat(tokens.verifyAccess(session.tokens().access()).email()).isEqualTo(email);
@@ -154,8 +150,7 @@ class OwnerAccountServiceIT extends AbstractPostgresIT {
     String email = email();
     owner.createOwner(freshSetupToken(out), email, PASSWORD);
 
-    assertThat(owner.login(email.toUpperCase(), PASSWORD, client()).user().email())
-        .isEqualTo(email);
+    assertThat(owner.login(email.toUpperCase(), PASSWORD).user().email()).isEqualTo(email);
   }
 
   @Test
@@ -165,10 +160,10 @@ class OwnerAccountServiceIT extends AbstractPostgresIT {
 
     Throwable wrong =
         org.assertj.core.api.Assertions.catchThrowable(
-            () -> owner.login(email, "wrong password!!", client()));
+            () -> owner.login(email, "wrong password!!"));
     Throwable unknown =
         org.assertj.core.api.Assertions.catchThrowable(
-            () -> owner.login(email(), "wrong password!!", client()));
+            () -> owner.login(email(), "wrong password!!"));
 
     assertThat(statusOf(wrong)).isEqualTo(401);
     assertThat(statusOf(unknown)).isEqualTo(401);
@@ -183,16 +178,28 @@ class OwnerAccountServiceIT extends AbstractPostgresIT {
     owner.createOwner(freshSetupToken(out), email, PASSWORD);
 
     for (int i = 0; i < 5; i++) {
-      String client = client(); // different clients: the email itself gets blocked
-      assertThatThrownBy(() -> owner.login(email, "wrong password!!", client))
+      assertThatThrownBy(() -> owner.login(email, "wrong password!!"))
           .satisfies(t -> assertThat(statusOf(t)).isEqualTo(401));
     }
 
-    assertThatThrownBy(() -> owner.login(email, PASSWORD, client()))
+    assertThatThrownBy(() -> owner.login(email, PASSWORD))
         .satisfies(
             t ->
                 assertThat(((ResponseStatusException) t).getStatusCode())
                     .isEqualTo(HttpStatus.TOO_MANY_REQUESTS));
+  }
+
+  @Test
+  void failuresForOtherEmailsNeverLockOutTheOwner(CapturedOutput out) {
+    String email = email();
+    owner.createOwner(freshSetupToken(out), email, PASSWORD);
+
+    for (int i = 0; i < 10; i++) {
+      assertThatThrownBy(() -> owner.login(email(), "wrong password!!"))
+          .satisfies(t -> assertThat(statusOf(t)).isEqualTo(401));
+    }
+
+    assertThat(owner.login(email, PASSWORD).user().email()).isEqualTo(email);
   }
 
   @Test
@@ -204,10 +211,9 @@ class OwnerAccountServiceIT extends AbstractPostgresIT {
 
     owner.resetPassword(recovery, "a brand new password");
 
-    assertThatThrownBy(() -> owner.login(email, PASSWORD, client()))
+    assertThatThrownBy(() -> owner.login(email, PASSWORD))
         .satisfies(t -> assertThat(statusOf(t)).isEqualTo(401));
-    assertThat(owner.login(email, "a brand new password", client()).user().email())
-        .isEqualTo(email);
+    assertThat(owner.login(email, "a brand new password").user().email()).isEqualTo(email);
     assertThatThrownBy(() -> tokens.refresh(first.tokens().refresh()))
         .satisfies(t -> assertThat(statusOf(t)).isEqualTo(401));
     assertThatThrownBy(() -> owner.resetPassword(recovery, "yet another password"))

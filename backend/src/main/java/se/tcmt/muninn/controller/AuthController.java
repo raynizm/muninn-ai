@@ -1,6 +1,5 @@
 package se.tcmt.muninn.controller;
 
-import jakarta.servlet.http.HttpServletRequest;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -83,12 +82,11 @@ public class AuthController {
 
   /** Signs in with email and password; 401 for any bad credentials, 429 when throttled. */
   @PostMapping("/login")
-  public TokenResponse passwordLogin(@RequestBody AccountRequest req, HttpServletRequest http) {
+  public TokenResponse passwordLogin(@RequestBody AccountRequest req) {
     if (isBlank(req.email()) || isBlank(req.password())) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "email and password are required");
     }
-    OwnerAccountService.Session session =
-        owner.login(req.email(), req.password(), http.getRemoteAddr());
+    OwnerAccountService.Session session = owner.login(req.email(), req.password());
     return response(session.tokens(), session.user());
   }
 

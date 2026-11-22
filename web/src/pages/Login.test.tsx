@@ -34,14 +34,36 @@ describe("Login", () => {
   });
 
   it("showsAnErrorForAWrongPassword", async () => {
-    const login = vi.fn().mockRejectedValue(new ApiError(401, "invalid email or password"));
+    const login = vi.fn().mockRejectedValue(new ApiError(401, "Unauthorized"));
     renderLogin({ login });
 
     await userEvent.type(await screen.findByLabelText(/email/i), "ann@example.com");
     await userEvent.type(screen.getByLabelText(/password/i), "nope nope nope");
     await userEvent.click(screen.getByRole("button", { name: /sign in/i }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("invalid email or password");
+    expect(await screen.findByRole("alert")).toHaveTextContent("Wrong email or password.");
+  });
+
+  it("explainsThrottlingInPlainWords", async () => {
+    const login = vi.fn().mockRejectedValue(new ApiError(429, "Too Many Requests"));
+    renderLogin({ login });
+
+    await userEvent.type(await screen.findByLabelText(/email/i), "ann@example.com");
+    await userEvent.type(screen.getByLabelText(/password/i), "long enough password");
+    await userEvent.click(screen.getByRole("button", { name: /sign in/i }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(/too many attempts/i);
+  });
+
+  it("saysSoWhenTheServerCannotBeReached", async () => {
+    const login = vi.fn().mockRejectedValue(new TypeError("Failed to fetch"));
+    renderLogin({ login });
+
+    await userEvent.type(await screen.findByLabelText(/email/i), "ann@example.com");
+    await userEvent.type(screen.getByLabelText(/password/i), "long enough password");
+    await userEvent.click(screen.getByRole("button", { name: /sign in/i }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(/cannot reach the server/i);
   });
 
   it("linksToPasswordReset", async () => {
