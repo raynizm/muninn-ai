@@ -155,4 +155,42 @@ describe("api client", () => {
     expect(headers.get("Authorization")).toBeNull();
     expect(JSON.parse(init.body as string)).toEqual({ password: "a brand new password" });
   });
+
+  it("changeEmailSendsCurrentPasswordAndNewEmail", async () => {
+    const user = { id: "u1", email: "new@example.com", displayName: null, role: "ADMIN" };
+    const fetchMock = vi.fn(async () => json(200, user));
+    const client = createClient("https://m.example", memoryStore({ accessToken: "A", refreshToken: "R" }), fetchMock);
+
+    const res = await client.changeEmail("current pw", "new@example.com");
+
+    expect(res.email).toBe("new@example.com");
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe("https://m.example/api/account/email");
+    expect(init.method).toBe("PUT");
+    expect(JSON.parse(init.body as string)).toEqual({ currentPassword: "current pw", email: "new@example.com" });
+    expect(new Headers(init.headers).get("Authorization")).toBe("Bearer A");
+  });
+
+  it("changePasswordStoresTheReturnedTokens", async () => {
+    const store = memoryStore({ accessToken: "A", refreshToken: "R" });
+    const fetchMock = vi.fn(async () => json(200, tokenResponse("A2", "R2")));
+    const client = createClient("https://m.example", store, fetchMock);
+
+    await client.changePassword("current pw", "a brand new password");
+
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe("https://m.example/api/account/password");
+    expect(JSON.parse(init.body as string)).toEqual({ currentPassword: "current pw", newPassword: "a brand new password" });
+    expect(store.current).toEqual({ accessToken: "A2", refreshToken: "R2" });
+  });
+
+  it("getStatsSendsTheTimeZone", async () => {
+    const fetchMock = vi.fn(async () => json(200, { totalRecordings: 0 }));
+    const client = createClient("https://m.example", memoryStore({ accessToken: "A", refreshToken: "R" }), fetchMock);
+
+    await client.getStats("Europe/Stockholm");
+
+    const [url] = fetchMock.mock.calls[0] as unknown as [string];
+    expect(url).toBe("https://m.example/api/stats?tz=Europe%2FStockholm");
+  });
 });

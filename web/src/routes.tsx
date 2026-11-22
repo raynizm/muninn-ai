@@ -9,6 +9,7 @@ import { Login } from "./pages/Login";
 import { RecordingDetail } from "./pages/RecordingDetail";
 import { Recordings } from "./pages/Recordings";
 import { Settings } from "./pages/Settings";
+import { Stats } from "./pages/Stats";
 import { ResetPassword } from "./pages/ResetPassword";
 
 /** First run: everything leads to the create-account page. Afterwards that page is gone. */
@@ -50,6 +51,7 @@ export function AppRoutes() {
         >
           <Route path="/" element={<Recordings />} />
           <Route path="/recordings/:id" element={<RecordingDetail />} />
+          <Route path="/stats" element={<Stats />} />
           <Route path="/settings" element={<Settings />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />

@@ -11,6 +11,7 @@ export function Layout() {
           <NavLink to="/" end>
             Recordings
           </NavLink>
+          <NavLink to="/stats">Stats</NavLink>
           <NavLink to="/settings">Settings</NavLink>
         </nav>
         <span className="spacer" />

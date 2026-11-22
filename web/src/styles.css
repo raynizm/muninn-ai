@@ -9,6 +9,7 @@
   --error: #b3261e;
   --ok: #1b7f3b;
   --warn-bg: #fff4d6;
+  --chart-1: #3b4cca;
   font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
   color: var(--text);
 }
@@ -24,6 +25,7 @@
     --error: #ff8a80;
     --ok: #6bd68b;
     --warn-bg: #3a3320;
+    --chart-1: #7385f5;
   }
 }
 * { box-sizing: border-box; }
@@ -53,10 +55,6 @@ button { font: inherit; padding: 0.5rem 0.9rem; border: 1px solid var(--border);
 button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
 button:disabled { opacity: 0.5; cursor: not-allowed; }
 .row { display: flex; gap: 0.5rem; flex-wrap: wrap; }
-.steps { display: flex; gap: 0.25rem; flex-wrap: wrap; list-style: none; padding: 0; margin: 1rem 0; font-size: 0.8rem; }
-.steps li { padding: 0.2rem 0.6rem; border-radius: 999px; background: var(--bg); color: var(--muted); }
-.steps li.current { background: var(--accent); color: var(--accent-text); }
-.steps li.done { color: var(--ok); }
 .result { border: 1px solid var(--border); border-radius: 8px; padding: 0.5rem 0.9rem; margin: 0.75rem 0; }
 .warning { background: var(--warn-bg); padding: 0.5rem 0.75rem; border-radius: 8px; }
 dl { display: grid; grid-template-columns: max-content 1fr; gap: 0.25rem 1rem; }
@@ -78,3 +76,15 @@ form.provider { padding: 1rem; border: 1px solid var(--border); border-radius: 1
 table.models { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
 table.models th, table.models td { text-align: left; padding: 0.3rem 0.5rem; border-bottom: 1px solid var(--border); }
 audio { width: 100%; margin: 0.5rem 0; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: 0.75rem; margin: 1rem 0; }
+.tile { display: grid; gap: 0.15rem; padding: 0.9rem 1rem; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; }
+.tile-value { font-size: 1.9rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+.chart { position: relative; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 0.75rem 0.75rem 0.25rem; }
+.chart svg { width: 100%; height: auto; display: block; }
+.chart .grid { stroke: var(--border); stroke-width: 1; }
+.chart .axis { fill: var(--muted); font-size: 11px; }
+.chart .bar { fill: var(--chart-1); opacity: 0.85; }
+.chart .bar.active { opacity: 1; }
+.chart .hit { fill: transparent; outline: none; }
+.chart .hit:focus-visible { stroke: var(--chart-1); stroke-width: 2; }
+.chart-tip { position: absolute; top: 0; transform: translateX(-50%); background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 0.25rem 0.6rem; font-size: 0.85rem; display: grid; pointer-events: none; z-index: 1; white-space: nowrap; }

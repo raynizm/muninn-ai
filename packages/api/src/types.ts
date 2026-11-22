@@ -135,3 +135,21 @@ export interface UploadOptions {
   durationMs?: number;
   title?: string;
 }
+
+export interface MonthStat {
+  /** `YYYY-MM` in the time zone that was asked for. */
+  month: string;
+  count: number;
+  durationMs: number;
+}
+
+export interface Stats {
+  totalRecordings: number;
+  /** Recordings whose length is known; hours and the average only cover these. */
+  recordingsWithDuration: number;
+  totalDurationMs: number;
+  averageDurationMs: number | null;
+  thisMonthRecordings: number;
+  /** The last 12 months, oldest first, empty months included. */
+  byMonth: MonthStat[];
+}

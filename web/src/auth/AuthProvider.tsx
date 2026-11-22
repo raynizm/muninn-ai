@@ -9,6 +9,8 @@ export interface AuthState {
   loginWithPassword(email: string, password: string): Promise<UserView>;
   /** First run: creates the account with the setup token and signs in. */
   createAccount(setupToken: string, email: string, password: string): Promise<UserView>;
+  /** Re-reads the signed-in user, for example after the email changed. */
+  reloadUser(): Promise<void>;
   logout(): Promise<void>;
 }
 
@@ -51,14 +53,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [api],
   );
 
+  const reloadUser = useCallback(async () => {
+    setUser(await api.me());
+  }, [api]);
+
   const logout = useCallback(async () => {
     await api.logout();
     setUser(null);
   }, [api]);
 
   const value = useMemo<AuthState>(
-    () => ({ user, role: user?.role ?? null, loading, loginWithPassword, createAccount, logout }),
-    [user, loading, loginWithPassword, createAccount, logout],
+    () => ({ user, role: user?.role ?? null, loading, loginWithPassword, createAccount, reloadUser, logout }),
+    [user, loading, loginWithPassword, createAccount, reloadUser, logout],
   );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

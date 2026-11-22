@@ -1,12 +1,14 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState, type FormEvent } from "react";
 import { useApi } from "../api";
+import { AccountSettings } from "../components/AccountSettings";
 import { ProviderForm } from "../components/ProviderForm";
 
 export function Settings() {
   return (
     <>
       <h1>Settings</h1>
+      <AccountSettings />
       <Providers />
     </>
   );

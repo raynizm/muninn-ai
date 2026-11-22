@@ -8,6 +8,7 @@ import type {
   Recording,
   RecordingDetail,
   Settings,
+  Stats,
   SettingsUpdate,
   TokenPair,
   TokenResponse,
@@ -71,6 +72,13 @@ export interface ApiClient {
   discoverModels(providerId: string): Promise<AiModel[]>;
   listModels(providerId: string): Promise<AiModel[]>;
   updateModel(id: string, update: { capabilities?: string[]; enabled?: boolean }): Promise<AiModel>;
+
+  /** Changes the login email; needs the current password. */
+  changeEmail(currentPassword: string, email: string): Promise<UserView>;
+  /** Changes the password; other sessions are signed out and this one gets fresh tokens. */
+  changePassword(currentPassword: string, newPassword: string): Promise<TokenResponse>;
+
+  getStats(timeZone: string): Promise<Stats>;
 
   getSettings(): Promise<Settings>;
   updateSettings(update: SettingsUpdate): Promise<Settings>;
@@ -234,6 +242,19 @@ export function createClient(
     discoverModels: (id) => json(`/api/providers/${id}/discover`, { method: "POST" }),
     listModels: (id) => json(`/api/providers/${id}/models`),
     updateModel: (id, update) => json(`/api/models/${id}`, { method: "PUT", ...jsonBody(update) }),
+
+    changeEmail: (currentPassword, email) =>
+      json("/api/account/email", { method: "PUT", ...jsonBody({ currentPassword, email }) }),
+    async changePassword(currentPassword, newPassword) {
+      const res = await json<TokenResponse>("/api/account/password", {
+        method: "PUT",
+        ...jsonBody({ currentPassword, newPassword }),
+      });
+      await tokens.set({ accessToken: res.accessToken, refreshToken: res.refreshToken });
+      return res;
+    },
+
+    getStats: (timeZone) => json(`/api/stats?tz=${encodeURIComponent(timeZone)}`),
 
     getSettings: () => json("/api/settings"),
     updateSettings: (update) => json("/api/settings", { method: "PUT", ...jsonBody(update) }),
